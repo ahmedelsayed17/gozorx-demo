@@ -1,6 +1,7 @@
 (() => {
   const app = document.getElementById('app');
   const toast = document.getElementById('toast');
+  const homeMarkup = app.innerHTML;
   const state = { page: 'home', suppliers: [], products: [], language: 'ar' };
   const categories = ['أشجار الفاكهة والشتلات المطعومة','أشجار الزينة واللاندسكيب','أشجار الغابات والأخشاب','الزيتون والموالح والمحاصيل المتخصصة'];
   const demoProducts = [
@@ -13,7 +14,7 @@
   function go(page){state.page=page;render();window.scrollTo({top:0,behavior:'smooth'});}
   function field(label,name,type='text',required=true){return '<div class="field"><label>'+label+'</label><input name="'+name+'" type="'+type+'" '+(required?'required':'')+'></div>';}
   function shell(title,subtitle,body){return '<section class="page"><div class="page-title"><span class="eyebrow">GOZORX</span><h1>'+title+'</h1><p>'+subtitle+'</p></div>'+body+'</section>';}
-  function renderHome(){return document.querySelector('.hero') ? document.querySelector('.hero').outerHTML + document.querySelector('.stats').outerHTML + document.querySelectorAll('.section')[0].outerHTML + Array.from(document.querySelectorAll('.split-cta')).map(x=>x.outerHTML).join('') : '<div class="empty">مرحبًا بك في GOZORX</div>';}
+  function renderHome(){return homeMarkup;}
   function render(){
     if(state.page==='home'){app.innerHTML=renderHome();return;}
     if(state.page==='market'){
