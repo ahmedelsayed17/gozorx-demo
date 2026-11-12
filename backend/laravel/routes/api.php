@@ -1,9 +1,9 @@
 <?php
 
-use Illuminate\\Support\\Facades\\Route;
-use App\\Http\\Controllers\\Api\\AuthController;
-use App\\Http\\Controllers\\Api\\SupplierController;
-use App\\Http\\Controllers\\Api\\SupplierProductController;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\SupplierProductController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
