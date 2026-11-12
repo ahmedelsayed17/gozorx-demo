@@ -1,0 +1,12 @@
+// Add these aliases to bootstrap/app.php inside ->withMiddleware(...):
+// $middleware->alias([
+//     'role' => \\App\\Http\\Middleware\\EnsureRole::class,
+//     'supplier.approved' => \\App\\Http\\Middleware\\EnsureSupplierApproved::class,
+// ]);
+//
+// Also ensure User model has:
+// public function supplierProfile(): \\Illuminate\\Database\\Eloquent\\Relations\\HasOne
+// { return $this->hasOne(\\App\\Models\\SupplierProfile::class); }
+// and uses Laravel\Sanctum\HasApiTokens alongside its existing traits.
+//
+// Merge these changes into the generated Laravel 12 files; do not replace framework defaults blindly.
