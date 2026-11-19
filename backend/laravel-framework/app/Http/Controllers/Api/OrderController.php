@@ -166,4 +166,69 @@ class OrderController extends Controller
             ], 201);
         });
     }
+
+    public function index(Request $request)
+    {
+        $orders = Order::query()
+            ->where('buyer_id', $request->user()->id)
+            ->with([
+                'supplierOrders.items',
+                'paymentTransactions' => function ($query) {
+                    $query->where('payment_type', 'deposit')->latest('id');
+                },
+            ])
+            ->latest('id')
+            ->get();
+
+        $orders->each(function ($order) {
+            $deposit = $order->paymentTransactions->first();
+
+            $receiptUploaded = (bool) ($deposit?->receipt_path);
+
+            $order->setAttribute('receipt_uploaded', $receiptUploaded);
+            $order->setAttribute('deposit_transaction', $deposit ? [
+                'status' => $deposit->status,
+                'review_note' => $deposit->review_note,
+                'transaction_reference' => $deposit->transaction_reference,
+                'receipt_uploaded' => $receiptUploaded,
+            ] : null);
+
+            $order->unsetRelation('paymentTransactions');
+        });
+
+        return response()->json([
+            'orders' => $orders,
+        ]);
+    }
+
+    public function show(Request $request, Order $order)
+    {
+        abort_unless(
+            (int) $order->buyer_id === (int) $request->user()->id,
+            404
+        );
+
+        $order->load('supplierOrders.items');
+
+        $depositTransaction = $order->paymentTransactions()
+            ->where('payment_type', 'deposit')
+            ->latest('id')
+            ->first();
+
+        $receiptUploaded = (bool) ($depositTransaction?->receipt_path);
+
+        $order->setAttribute('receipt_uploaded', $receiptUploaded);
+
+        $order->setAttribute('deposit_transaction', $depositTransaction ? [
+            'status' => $depositTransaction->status,
+            'review_note' => $depositTransaction->review_note,
+            'transaction_reference' => $depositTransaction->transaction_reference,
+            'receipt_uploaded' => $receiptUploaded,
+        ] : null);
+
+        return response()->json([
+            'order' => $order,
+        ]);
+    }
+
 }

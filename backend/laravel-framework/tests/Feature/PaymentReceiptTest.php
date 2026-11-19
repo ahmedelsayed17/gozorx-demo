@@ -217,4 +217,61 @@ class PaymentReceiptTest extends TestCase
             'receipt_path' => null,
         ]);
     }
+
+    public function test_buyer_can_retrieve_their_own_order(): void
+    {
+        $buyer = User::factory()->create([
+            'role' => 'buyer',
+            'is_active' => true,
+        ]);
+
+        $order = $this->createOrderWithDeposit($buyer);
+
+        $response = $this->actingAs($buyer, 'sanctum')
+            ->getJson('/api/v1/orders/' . $order->id);
+
+        $response->assertOk()
+            ->assertJsonPath('order.id', $order->id)
+            ->assertJsonPath('order.order_number', $order->order_number)
+            ->assertJsonPath('order.receipt_uploaded', false);
+    }
+
+    public function test_buyer_cannot_retrieve_another_buyers_order(): void
+    {
+        $owner = User::factory()->create([
+            'role' => 'buyer',
+            'is_active' => true,
+        ]);
+
+        $anotherBuyer = User::factory()->create([
+            'role' => 'buyer',
+            'is_active' => true,
+        ]);
+
+        $order = $this->createOrderWithDeposit($owner);
+
+        $response = $this->actingAs($anotherBuyer, 'sanctum')
+            ->getJson('/api/v1/orders/' . $order->id);
+
+        $response->assertNotFound();
+    }
+
+    public function test_retrieved_order_reports_when_deposit_receipt_was_uploaded(): void
+    {
+        $buyer = User::factory()->create([
+            'role' => 'buyer',
+            'is_active' => true,
+        ]);
+
+        $order = $this->createOrderWithDeposit($buyer, [], [
+            'receipt_path' => 'receipts/test-receipt.jpg',
+        ]);
+
+        $response = $this->actingAs($buyer, 'sanctum')
+            ->getJson('/api/v1/orders/' . $order->id);
+
+        $response->assertOk()
+            ->assertJsonPath('order.receipt_uploaded', true);
+    }
+
 }

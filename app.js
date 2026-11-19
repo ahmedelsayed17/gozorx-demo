@@ -11,6 +11,9 @@
     products: [],
     selectedProduct: null,
     cart: [],
+    currentOrder: null,
+    currentAdminOrder: null,
+    returnToCheckout: false,
     language: 'ar',
     token: savedToken || null,
     user: savedUser ? JSON.parse(savedUser) : null
@@ -20,9 +23,11 @@
   const API_BASE = 'https://curly-space-enigma-7v9xggrg794v3r9xj-8000.app.github.dev/api/v1';
 
   async function apiRequest(endpoint, options = {}) {
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
     const headers = {
       'Accept': 'application/json',
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(state.token ? { 'Authorization': 'Bearer ' + state.token } : {}),
       ...(options.headers || {})
     };
@@ -53,6 +58,25 @@
     localStorage.setItem('gozorx_user', JSON.stringify(data.user));
   }
 
+  async function restoreCurrentOrder(navigate = false) {
+    const orderId = localStorage.getItem('gozorx_current_order_id');
+    if (!state.token || !orderId) return false;
+
+    try {
+      const result = await apiRequest(
+        `/orders/${encodeURIComponent(orderId)}`
+      );
+      if (!result.order) throw new Error('لم يتم العثور على الطلب.');
+
+      state.currentOrder = result.order;
+      if (navigate) go('order-payment');
+      return true;
+    } catch (error) {
+      console.warn('Order restore failed:', error.message);
+      return false;
+    }
+  }
+
   function clearSession() {
     state.token = null;
     state.user = null;
@@ -70,8 +94,8 @@
       area.innerHTML =
         '<span class="account-name"></span> ' +
         (state.user.role === 'admin'
-          ? '<button class="outline" data-page="admin-payments" type="button">مراجعة المدفوعات</button> '
-          : '') +
+          ? '<button class="outline" data-page="admin-orders" type="button">إدارة الطلبات</button> <button class="outline" data-page="admin-payments" type="button">مراجعة المدفوعات</button> '
+          : '<button class="outline" data-page="my-orders" type="button">طلباتي</button> ') +
         '<button class="outline" id="logoutBtn" type="button">تسجيل الخروج</button>';
 
       area.querySelector('.account-name').textContent = name;
@@ -282,6 +306,355 @@
     loadAdminPayments();
   }
 
+
+
+  const adminOrderStatusLabels = {
+    pending_payment: 'بانتظار العربون',
+    confirmed: 'تم تأكيد الطلب',
+    processing: 'قيد التجهيز',
+    shipped: 'تم الشحن',
+    delivered: 'تم التسليم',
+    cancelled: 'ملغي',
+    completed: 'مكتمل'
+  };
+
+  async function loadAdminOrders() {
+    const container = document.getElementById('adminOrdersList');
+    if (!container) return;
+
+    const search = document.getElementById('adminOrdersSearch')?.value.trim() || '';
+    const status = document.getElementById('adminOrdersStatus')?.value || '';
+
+    container.innerHTML = '<div class="empty">جارٍ تحميل الطلبات...</div>';
+
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (status) params.set('status', status);
+
+    try {
+      const result = await apiRequest('/admin/orders' + (params.toString() ? '?' + params.toString() : ''));
+      const orders = Array.isArray(result.data) ? result.data : [];
+
+      if (!orders.length) {
+        container.innerHTML = '<div class="panel empty">لا توجد طلبات تطابق البحث أو الفلتر المحدد.</div>';
+        return;
+      }
+
+      container.innerHTML = orders.map(order => {
+        const buyer = order.buyer || {};
+        const buyerName = buyer.full_name || buyer.name || 'عميل';
+        const statusLabel = adminOrderStatusLabels[order.status] || order.status || 'غير محدد';
+        const createdAt = order.created_at
+          ? new Date(order.created_at).toLocaleString('ar-EG')
+          : '—';
+
+        return `
+          <article class="panel admin-order-card">
+            <div class="admin-order-heading">
+              <div>
+                <span class="hint">رقم الطلب</span>
+                <h3>${escapeAdminHtml(order.order_number || order.id)}</h3>
+              </div>
+              <span class="status">${escapeAdminHtml(statusLabel)}</span>
+            </div>
+            <div class="admin-order-grid">
+              <div><span>العميل</span><strong>${escapeAdminHtml(buyerName)}</strong></div>
+              <div><span>هاتف العميل</span><strong>${escapeAdminHtml(buyer.phone || order.recipient_phone || '—')}</strong></div>
+              <div><span>تاريخ الطلب</span><strong>${escapeAdminHtml(createdAt)}</strong></div>
+              <div><span>إجمالي الطلب</span><strong>${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+              <div><span>العربون المطلوب</span><strong>${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+              <div><span>المتبقي عند الاستلام</span><strong>${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+            </div>
+            <button class="outline" type="button" data-admin-order-id="${escapeAdminHtml(order.id)}">عرض التفاصيل</button>
+          </article>
+        `;
+      }).join('');
+    } catch (error) {
+      console.error('Admin orders error:', error);
+      container.innerHTML =
+        '<div class="panel empty">تعذر تحميل الطلبات: ' +
+        escapeAdminHtml(error.message) +
+        '<br><button class="outline" type="button" data-admin-orders-action="refresh">إعادة المحاولة</button></div>';
+    }
+  }
+
+  function renderAdminOrders() {
+    if (!state.token || !state.user || state.user.role !== 'admin') {
+      app.innerHTML = shell(
+        'غير مصرح بالدخول',
+        'هذه الصفحة متاحة لحسابات الإدارة فقط.',
+        '<div class="panel"><p>سجّل الدخول بحساب إداري للوصول إلى إدارة الطلبات.</p><button class="primary" data-page="login">تسجيل الدخول</button></div>'
+      );
+      return;
+    }
+
+    app.innerHTML = shell(
+      'إدارة الطلبات',
+      'استعرض جميع طلبات العملاء وابحث عنها وتابع تفاصيلها.',
+      `<div class="admin-orders-toolbar panel">
+        <div class="admin-orders-filters">
+          <input id="adminOrdersSearch" type="search" placeholder="ابحث برقم الطلب أو اسم العميل أو الهاتف أو البريد">
+          <select id="adminOrdersStatus">
+            <option value="">كل الحالات</option>
+            <option value="pending_payment">بانتظار العربون</option>
+            <option value="confirmed">تم تأكيد الطلب</option>
+            <option value="processing">قيد التجهيز</option>
+            <option value="shipped">تم الشحن</option>
+            <option value="delivered">تم التسليم</option>
+            <option value="cancelled">ملغي</option>
+            <option value="completed">مكتمل</option>
+          </select>
+          <button class="primary" type="button" data-admin-orders-action="search">بحث وتصفية</button>
+          <button class="outline" type="button" data-admin-orders-action="refresh">تحديث</button>
+        </div>
+      </div>
+      <div id="adminOrdersList"><div class="empty">جارٍ تحميل الطلبات...</div></div>`
+    );
+
+    loadAdminOrders();
+  }
+
+  async function openAdminOrder(orderId, button) {
+    if (!state.token || !state.user || state.user.role !== 'admin') {
+      notify('هذه الصفحة متاحة للإدارة فقط.');
+      return;
+    }
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'جارٍ تحميل التفاصيل...';
+    }
+
+    try {
+      const result = await apiRequest('/admin/orders/' + encodeURIComponent(orderId));
+      if (!result.order) throw new Error('لم يتم العثور على الطلب.');
+
+      state.currentAdminOrder = result.order;
+      state.page = 'admin-order-details';
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      notify(error.message);
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'عرض التفاصيل';
+      }
+    }
+  }
+
+  function renderAdminOrderDetails() {
+    if (!state.token || !state.user || state.user.role !== 'admin') {
+      app.innerHTML = shell(
+        'غير مصرح بالدخول',
+        'هذه الصفحة متاحة لحسابات الإدارة فقط.',
+        '<div class="panel"><button class="primary" data-page="login">تسجيل الدخول</button></div>'
+      );
+      return;
+    }
+
+    const order = state.currentAdminOrder;
+    if (!order) {
+      app.innerHTML = shell(
+        'تفاصيل الطلب',
+        'لم يتم تحميل بيانات الطلب.',
+        '<div class="panel"><button class="outline" data-page="admin-orders">العودة إلى إدارة الطلبات</button></div>'
+      );
+      return;
+    }
+
+    const buyer = order.buyer || {};
+    const payment = order.deposit_transaction || null;
+    const statusLabel = adminOrderStatusLabels[order.status] || order.status || 'غير محدد';
+    const supplierOrders = Array.isArray(order.supplier_orders) ? order.supplier_orders :
+      (Array.isArray(order.supplierOrders) ? order.supplierOrders : []);
+
+    const supplierSections = supplierOrders.length
+      ? supplierOrders.map((supplierOrder, index) => {
+          const supplier = supplierOrder.supplier || {};
+          const supplierUser = supplier.user || {};
+          const items = Array.isArray(supplierOrder.items) ? supplierOrder.items : [];
+
+          return `
+            <section class="panel admin-order-supplier">
+              <h3>طلب المورد ${index + 1}</h3>
+              <p><strong>المورد:</strong> ${escapeAdminHtml(supplier.business_name || supplierUser.full_name || supplierUser.name || '—')}</p>
+              <p><strong>حالة طلب المورد:</strong> ${escapeAdminHtml(adminOrderStatusLabels[supplierOrder.status] || supplierOrder.status || '—')}</p>
+              <p><strong>الإجمالي:</strong> ${Number(supplierOrder.grand_total || supplierOrder.subtotal || 0).toLocaleString('ar-EG')} جنيه</p>
+              ${items.length ? `<ul>${items.map(item => `
+                <li>${escapeAdminHtml(item.product_name_ar || item.product_name_en || item.product_name || 'منتج')}
+                — الكمية: ${Number(item.quantity || 0)}
+                — ${Number(item.line_total || 0).toLocaleString('ar-EG')} جنيه</li>
+              `).join('')}</ul>` : '<p>لا توجد تفاصيل أصناف متاحة.</p>'}
+            </section>
+          `;
+        }).join('')
+      : '<div class="panel">لا توجد تفاصيل طلبات موردين متاحة في البيانات.</div>';
+
+    app.innerHTML = shell(
+      'تفاصيل الطلب',
+      'مراجعة بيانات العميل والطلب والموردين وحالة العربون.',
+      `
+        <div class="admin-orders-toolbar">
+          <button class="outline" type="button" data-admin-orders-action="back">العودة إلى قائمة الطلبات</button>
+        </div>
+        <section class="panel admin-order-detail">
+          <h3>الطلب رقم: ${escapeAdminHtml(order.order_number || order.id)}</h3>
+          <div class="admin-order-grid">
+            <div><span>حالة الطلب</span><strong>${escapeAdminHtml(statusLabel)}</strong></div>
+            <div><span>تاريخ الإنشاء</span><strong>${escapeAdminHtml(order.created_at ? new Date(order.created_at).toLocaleString('ar-EG') : '—')}</strong></div>
+            <div><span>اسم العميل</span><strong>${escapeAdminHtml(buyer.full_name || buyer.name || '—')}</strong></div>
+            <div><span>هاتف العميل</span><strong>${escapeAdminHtml(buyer.phone || '—')}</strong></div>
+            <div><span>البريد الإلكتروني</span><strong>${escapeAdminHtml(buyer.email || '—')}</strong></div>
+            <div><span>اسم المستلم</span><strong>${escapeAdminHtml(order.recipient_name || '—')}</strong></div>
+            <div><span>هاتف المستلم</span><strong>${escapeAdminHtml(order.recipient_phone || '—')}</strong></div>
+            <div><span>العنوان</span><strong>${escapeAdminHtml(order.address || '—')}</strong></div>
+            <div><span>إجمالي الطلب</span><strong>${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+            <div><span>العربون 30%</span><strong>${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+            <div><span>المتبقي 70%</span><strong>${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+          </div>
+        </section>
+        <section class="panel admin-order-detail">
+          <h3>بيانات العربون</h3>
+          <p><strong>حالة الإيصال:</strong> ${escapeAdminHtml(payment?.status || (order.receipt_uploaded ? 'مرفوع' : 'لم يتم رفع إيصال'))}</p>
+          <p><strong>طريقة الدفع:</strong> ${escapeAdminHtml(payment?.payment_method || '—')}</p>
+          <p><strong>مرجع التحويل:</strong> ${escapeAdminHtml(payment?.transaction_reference || '—')}</p>
+          <p><strong>ملاحظة الإدارة:</strong> ${escapeAdminHtml(payment?.review_note || 'لا توجد ملاحظات')}</p>
+          <p class="hint">هذه الصفحة للعرض فقط. مراجعة الإيصال تتم من صفحة مراجعة المدفوعات.</p>
+        </section>
+        <h2>تفاصيل الموردين والأصناف</h2>
+        ${supplierSections}
+      `
+    );
+  }
+
+  async function loadMyOrders() {
+    const container = document.getElementById('myOrdersList');
+    if (!container) return;
+
+    container.innerHTML = '<div class="empty">جارٍ تحميل طلباتك...</div>';
+
+    try {
+      const result = await apiRequest('/orders');
+      const orders = Array.isArray(result.orders) ? result.orders : [];
+
+      if (!orders.length) {
+        container.innerHTML = `
+          <div class="panel empty">
+            <h3>لا توجد طلبات حتى الآن</h3>
+            <p>عندما تنشئ طلبًا من السوق الزراعي سيظهر هنا.</p>
+            <button class="primary" data-page="market" type="button">تصفح السوق</button>
+          </div>`;
+        return;
+      }
+
+      const labels = {
+        pending_payment: 'بانتظار العربون',
+        confirmed: 'تم تأكيد الطلب',
+        processing: 'قيد التجهيز',
+        shipped: 'تم الشحن',
+        delivered: 'تم التسليم',
+        cancelled: 'ملغي',
+        completed: 'مكتمل'
+      };
+
+      container.innerHTML = orders.map(order => {
+        const payment = order.deposit_transaction || null;
+        let receiptStatus = 'لم يتم رفع الإيصال';
+
+        if (order.receipt_uploaded) {
+          receiptStatus = payment?.status === 'rejected'
+            ? 'الإيصال مرفوض - راجع سبب الرفض'
+            : payment?.status === 'approved'
+              ? 'تم اعتماد العربون'
+              : 'الإيصال بانتظار مراجعة الإدارة';
+        }
+
+        const createdAt = order.created_at
+          ? new Date(order.created_at).toLocaleString('ar-EG')
+          : '—';
+
+        const orderStatus = labels[order.status] || order.status || 'غير محدد';
+        const statusClass = ['confirmed', 'delivered', 'completed'].includes(order.status)
+          ? 'ok' : '';
+
+        return `
+          <article class="panel my-order-card">
+            <div class="my-order-heading">
+              <div>
+                <span class="hint">رقم الطلب</span>
+                <h3>${escapeAdminHtml(order.order_number || order.id)}</h3>
+              </div>
+              <span class="status ${statusClass}">${escapeAdminHtml(orderStatus)}</span>
+            </div>
+
+            <div class="my-order-grid">
+              <div><span>تاريخ الطلب</span><strong>${escapeAdminHtml(createdAt)}</strong></div>
+              <div><span>إجمالي الطلب</span><strong>${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+              <div><span>العربون (30%)</span><strong>${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+              <div><span>المتبقي عند الاستلام</span><strong>${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+            </div>
+
+            <p class="my-order-receipt">
+              <strong>حالة الإيصال:</strong> ${escapeAdminHtml(receiptStatus)}
+            </p>
+
+            <button class="outline" type="button"
+              data-my-order-id="${escapeAdminHtml(order.id)}">عرض التفاصيل</button>
+          </article>`;
+      }).join('');
+
+    } catch (error) {
+      console.error('My orders error:', error);
+      container.innerHTML =
+        '<div class="panel empty">تعذر تحميل طلباتك: ' +
+        escapeAdminHtml(error.message) +
+        '<br><button class="outline" data-my-orders-action="refresh">إعادة المحاولة</button></div>';
+    }
+  }
+
+  function renderMyOrders() {
+    if (!state.token || !state.user || state.user.role === 'admin') {
+      app.innerHTML = shell(
+        'طلباتي',
+        'سجّل الدخول بحساب مشتري لعرض طلباتك.',
+        '<div class="panel"><p>هذه الصفحة متاحة لحسابات المشترين.</p><button class="primary" data-page="login">تسجيل الدخول</button></div>'
+      );
+      return;
+    }
+
+    app.innerHTML = shell(
+      'طلباتي',
+      'تابع طلباتك وحالة العربون والإيصالات من مكان واحد.',
+      '<div class="my-orders-toolbar"><p>طلباتك المسجلة على GOZORX.</p><button class="outline" data-my-orders-action="refresh">تحديث الطلبات</button></div><div id="myOrdersList"><div class="empty">جارٍ تحميل طلباتك...</div></div>'
+    );
+
+    loadMyOrders();
+  }
+
+  async function openMyOrder(orderId, button) {
+    if (!state.token || !state.user || state.user.role === 'admin') {
+      notify('سجّل الدخول بحساب المشتري لعرض الطلب.');
+      return;
+    }
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'جارٍ تحميل التفاصيل...';
+    }
+
+    try {
+      const result = await apiRequest('/orders/' + encodeURIComponent(orderId));
+      state.currentOrder = result.order;
+      go('order-details');
+    } catch (error) {
+      notify(error.message);
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'عرض التفاصيل';
+      }
+    }
+  }
+
   function renderHome(){return homeMarkup;}
   function render(){
     if(state.page==='home'){app.innerHTML=renderHome();return;}
@@ -290,6 +663,80 @@
       renderAdminPayments();
       return;
     }
+
+    if(state.page==='admin-orders'){
+      renderAdminOrders();
+      return;
+    }
+
+    if(state.page==='admin-order-details'){
+      renderAdminOrderDetails();
+      return;
+    }
+
+    if(state.page==='my-orders'){
+      renderMyOrders();
+      return;
+    }
+
+    if(state.page==='order-details'){
+      const order = state.currentOrder;
+
+      if(!order){
+        app.innerHTML = shell(
+          'تفاصيل الطلب',
+          'لا توجد بيانات للطلب.',
+          '<div class="panel"><button class="outline" data-page="my-orders">العودة إلى طلباتي</button></div>'
+        );
+        return;
+      }
+
+      const payment = order.deposit_transaction || null;
+      const labels = {
+        pending_payment: 'بانتظار العربون',
+        confirmed: 'تم تأكيد الطلب',
+        processing: 'قيد التجهيز',
+        shipped: 'تم الشحن',
+        delivered: 'تم التسليم',
+        cancelled: 'ملغي',
+        completed: 'مكتمل'
+      };
+
+      const receiptStatus = !order.receipt_uploaded
+        ? 'لم يتم رفع الإيصال'
+        : payment?.status === 'rejected'
+          ? 'الإيصال مرفوض'
+          : payment?.status === 'approved'
+            ? 'تم اعتماد العربون'
+            : 'بانتظار مراجعة الإدارة';
+
+      const reviewNote = payment?.review_note
+        ? '<div class="payment-notice"><strong>سبب الرفض أو ملاحظة الإدارة:</strong><p>' +
+          escapeAdminHtml(payment.review_note) + '</p></div>'
+        : '';
+
+      app.innerHTML = shell(
+        'تفاصيل الطلب',
+        'رقم الطلب: ' + escapeAdminHtml(order.order_number || order.id),
+        `
+          <div class="panel order-payment-summary">
+            <h3>ملخص الطلب</h3>
+            <p>حالة الطلب: <strong>${escapeAdminHtml(labels[order.status] || order.status || 'غير محدد')}</strong></p>
+            <p>إجمالي الطلب: <strong>${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه</strong></p>
+            <p>العربون (30%): <strong>${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه</strong></p>
+            <p>المتبقي عند الاستلام (70%): <strong>${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه</strong></p>
+            <p>حالة الإيصال: <strong>${receiptStatus}</strong></p>
+          </div>
+          ${reviewNote}
+          <div class="my-order-actions">
+            ${order.status === 'pending_payment' ? '<button class="primary" data-open-order-payment>متابعة العربون</button>' : ''}
+            <button class="outline" data-page="my-orders">العودة إلى طلباتي</button>
+          </div>
+        `
+      );
+      return;
+    }
+
 
     if(state.page==='market'){
       app.innerHTML=shell('السوق الزراعي','تصفح المنتجات المنشورة من الموردين المعتمدين على GOZORX.','<div class="toolbar"><input id="searchProduct" placeholder="ابحث عن منتج..."><select id="categoryFilter"><option value="">كل الأقسام</option></select></div><div class="product-grid" id="products"><div class="empty">جارٍ تحميل المنتجات...</div></div>');
@@ -381,6 +828,288 @@
       Promise.all([loadCategories(), loadProducts()]);
       return;
     }
+
+    if(state.page==='checkout'){
+      if(!state.cart.length){
+        app.innerHTML = shell(
+          'إتمام الطلب',
+          'سلة المشتريات فارغة.',
+          '<div class="panel empty">أضف منتجات إلى السلة أولًا.</div><button class="primary" data-page="market">تصفح السوق</button>'
+        );
+        return;
+      }
+
+      if(!state.token || !state.user){
+        state.returnToCheckout = true;
+        app.innerHTML = shell(
+          'تسجيل الدخول مطلوب',
+          'سجّل الدخول لمتابعة إتمام طلبك.',
+          '<div class="panel"><button class="primary" data-page="login">تسجيل الدخول</button></div>'
+        );
+        return;
+      }
+
+      const total = state.cart.reduce(
+        (sum, item) => sum + Number(item.product.unit_price || 0) * item.quantity,
+        0
+      );
+
+      const safeCheckout = value => escapeAdminHtml(value);
+      const user = state.user || {};
+
+      const summary = state.cart.map(item => `
+        <div class="checkout-summary-item">
+          <span>${safeCheckout(item.product.name_ar || item.product.name_en || 'منتج زراعي')} × ${item.quantity}</span>
+          <strong>${(Number(item.product.unit_price || 0) * item.quantity).toLocaleString('ar-EG')} جنيه</strong>
+        </div>
+      `).join('');
+
+      app.innerHTML = shell(
+        'بيانات الشحن وإتمام الطلب',
+        'أدخل بيانات استلام الطلب واختر وسيلة تحويل العربون.',
+        `
+        <div class="checkout-layout">
+          <form class="panel form-grid" id="checkoutForm">
+            <h3 class="field full">بيانات مستلم الطلب</h3>
+
+            ${field('اسم المستلم','recipient_name')}
+            ${field('رقم هاتف المستلم','recipient_phone','tel')}
+
+            ${field('المحافظة','governorate')}
+            ${field('المدينة / المركز','city')}
+
+            <div class="field full">
+              <label>العنوان بالتفصيل</label>
+              <textarea name="address" required maxlength="1000"></textarea>
+            </div>
+
+            <div class="field full">
+              <label>ملاحظات التوصيل (اختياري)</label>
+              <textarea name="delivery_notes" maxlength="2000"></textarea>
+            </div>
+
+            <h3 class="field full">وسيلة تحويل العربون</h3>
+
+            <div class="field full">
+              <label for="payment_method">اختر وسيلة الدفع</label>
+              <select name="payment_method" id="payment_method" required>
+                <option value="vodafone_cash">فودافون كاش</option>
+                <option value="instapay">InstaPay</option>
+              </select>
+            </div>
+
+            <div class="field full">
+              <div class="payment-notice">
+                سيتم دفع 30% من إجمالي الطلب مقدمًا بعد التحويل ومراجعة الإيصال.
+                المتبقي 70% يُدفع عند الاستلام.
+              </div>
+            </div>
+
+            <div class="field full">
+              <button class="primary" type="submit" id="placeOrderBtn">تأكيد بيانات الطلب</button>
+              <button class="outline" type="button" data-page="cart">العودة إلى السلة</button>
+            </div>
+          </form>
+
+          <aside class="panel checkout-summary">
+            <h3>ملخص مشترياتك</h3>
+            ${summary}
+            <div class="checkout-summary-total">
+              <span>إجمالي المنتجات</span>
+              <strong>${total.toLocaleString('ar-EG')} جنيه</strong>
+            </div>
+            <p>العربون المطلوب (30%): <strong>${(total * 0.30).toLocaleString('ar-EG',{maximumFractionDigits:2})} جنيه</strong></p>
+            <p>المتبقي عند الاستلام (70%): <strong>${(total * 0.70).toLocaleString('ar-EG',{maximumFractionDigits:2})} جنيه</strong></p>
+            <small class="hint">سيتم تثبيت الكميات لمدة 24 ساعة بعد إنشاء الطلب.</small>
+          </aside>
+        </div>
+        `
+      );
+
+      const checkoutForm = document.getElementById('checkoutForm');
+      const checkoutButton = document.getElementById('placeOrderBtn');
+
+      if(user.full_name) checkoutForm.elements.recipient_name.value = user.full_name;
+      else if(user.name) checkoutForm.elements.recipient_name.value = user.name;
+
+      if(user.phone) checkoutForm.elements.recipient_phone.value = user.phone;
+      if(user.governorate) checkoutForm.elements.governorate.value = user.governorate;
+      if(user.city) checkoutForm.elements.city.value = user.city;
+
+      checkoutForm.addEventListener('submit', async e => {
+        e.preventDefault();
+
+        const formData = Object.fromEntries(new FormData(checkoutForm));
+        const payload = {
+          ...formData,
+          items: state.cart.map(item => ({
+            product_id: Number(item.product.id),
+            quantity: Number(item.quantity)
+          }))
+        };
+
+        checkoutButton.disabled = true;
+        checkoutButton.textContent = 'جارٍ إنشاء الطلب...';
+
+        try {
+          const result = await apiRequest('/orders', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+
+          if(!result.order){
+            throw new Error('تم الاتصال بالخادم لكن لم يتم استلام بيانات الطلب.');
+          }
+
+          state.currentOrder = result.order;
+          state.currentOrder.receipt_uploaded = false;
+            localStorage.setItem(
+              'gozorx_current_order_id',
+              String(result.order.id)
+            );
+          state.cart = [];
+          updateCartCount();
+
+          notify('تم إنشاء الطلب وحجز الكميات لمدة 24 ساعة');
+          go('order-payment');
+        } catch(error) {
+          notify(error.message);
+          checkoutButton.disabled = false;
+          checkoutButton.textContent = 'تأكيد بيانات الطلب';
+        }
+      });
+
+      return;
+    }
+
+    if(state.page==='order-payment'){
+      const order = state.currentOrder;
+
+      if(!order){
+        app.innerHTML = shell(
+          'ملخص الطلب',
+          'لا يوجد طلب حالي في هذه الجلسة.',
+          '<div class="panel empty">أنشئ طلبًا من السلة أولًا.</div><button class="primary" data-page="market">العودة إلى السوق</button>'
+        );
+        return;
+      }
+
+      const expiry = order.deposit_expires_at
+        ? new Date(order.deposit_expires_at).toLocaleString('ar-EG')
+        : 'خلال 24 ساعة من إنشاء الطلب';
+
+      const paymentMethod = order.payment_method === 'instapay'
+        ? 'InstaPay'
+        : 'فودافون كاش';
+
+      const paymentAccount = order.payment_method === 'instapay'
+        ? '01149313719'
+        : '01065014560';
+
+      const depositAmount = Number(order.deposit_amount || 0).toLocaleString('ar-EG');
+      const accountHolder = 'أحمد السيد (Ahmed El Sayed)';
+      const paymentDetailsText = `GOZORX - ${paymentMethod}\nرقم التحويل: ${paymentAccount}\nاسم صاحب الحساب: ${accountHolder}\nمبلغ العربون: ${depositAmount} جنيه`;
+
+      const paymentDetails = `
+        <div class="panel payment-account-card">
+          <h3>بيانات التحويل المعتمدة</h3>
+          <p>حوّل مبلغ العربون الموضح أدناه إلى الحساب الخاص بوسيلة الدفع المختارة.</p>
+          <div class="payment-account-row"><span>وسيلة الدفع</span><strong>${paymentMethod}</strong></div>
+          <div class="payment-account-row"><span>رقم التحويل</span><strong dir="ltr">${paymentAccount}</strong></div>
+          <div class="payment-account-row"><span>اسم صاحب الحساب</span><strong>${accountHolder}</strong></div>
+          <div class="payment-account-row"><span>مبلغ العربون المطلوب</span><strong>${depositAmount} جنيه</strong></div>
+          <button class="outline" type="button" id="copyPaymentDetailsBtn">نسخ بيانات التحويل</button>
+        </div>
+      `;
+
+      const receiptSection = paymentDetails + (order.receipt_uploaded
+        ? '<div class="payment-notice"><strong>تم استلام إيصال التحويل.</strong><p>الإيصال بانتظار مراجعة الإدارة. الطلب لم يتأكد بعد.</p></div>'
+        : `
+          <form class="panel form-grid" id="depositReceiptForm">
+            <h3 class="field full">رفع إيصال العربون بعد التحويل</h3>
+            <div class="field full">
+              <label>رقم العملية (اختياري)</label>
+              <input name="transaction_reference" maxlength="160">
+            </div>
+            <div class="field full">
+              <label>صورة أو ملف الإيصال</label>
+              <input name="receipt" type="file" accept=".jpg,.jpeg,.png,.pdf" required>
+              <small class="hint">الصيغ المسموحة JPG وPNG وPDF، بحد أقصى 5 ميجابايت.</small>
+            </div>
+            <div class="field full">
+              <button class="primary" type="submit" id="uploadReceiptBtn">رفع إيصال التحويل</button>
+            </div>
+          </form>
+        `);
+
+      app.innerHTML = shell(
+        'تفاصيل الطلب والعربون',
+        'احتفظ برقم الطلب وتابع حالة مراجعة العربون.',
+        `
+        <div class="panel order-payment-summary">
+          <h3>طلب رقم: ${escapeAdminHtml(order.order_number || order.id)}</h3>
+          <p>وسيلة التحويل المختارة: <strong>${paymentMethod}</strong></p>
+          <p>إجمالي الطلب: <strong>${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه</strong></p>
+          <p>العربون المطلوب (30%): <strong>${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه</strong></p>
+          <p>المتبقي عند الاستلام (70%): <strong>${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه</strong></p>
+          <p>آخر موعد لمراجعة العربون: <strong>${expiry}</strong></p>
+        </div>
+        ${receiptSection}
+        <div class="payment-notice">
+          رفع الإيصال لا يعني تأكيد الدفع. ستظل الكميات محجوزة لمدة 24 ساعة، ويصبح الطلب مؤكدًا بعد اعتماد الإدارة للعربون.
+        </div>
+        <button class="outline" data-page="market">العودة إلى السوق</button>
+        `
+      );
+
+      const copyPaymentDetailsBtn = document.getElementById('copyPaymentDetailsBtn');
+
+      if(copyPaymentDetailsBtn){
+        copyPaymentDetailsBtn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(paymentDetailsText);
+            notify('تم نسخ بيانات التحويل بنجاح');
+          } catch(error) {
+            notify('تعذر النسخ تلقائيًا. يمكنك نسخ الرقم يدويًا.');
+          }
+        });
+      }
+
+      const receiptForm = document.getElementById('depositReceiptForm');
+
+      if(receiptForm){
+        receiptForm.addEventListener('submit', async e => {
+          e.preventDefault();
+
+          const uploadButton = document.getElementById('uploadReceiptBtn');
+          const formData = new FormData(receiptForm);
+
+          uploadButton.disabled = true;
+          uploadButton.textContent = 'جارٍ رفع الإيصال...';
+
+          try {
+            await apiRequest(
+              `/orders/${encodeURIComponent(order.id)}/deposit-receipt`,
+              {
+                method: 'POST',
+                body: formData
+              }
+            );
+
+            state.currentOrder.receipt_uploaded = true;
+            notify('تم استلام الإيصال وهو بانتظار مراجعة الإدارة');
+            go('order-payment');
+          } catch(error) {
+            notify(error.message);
+            uploadButton.disabled = false;
+            uploadButton.textContent = 'رفع إيصال التحويل';
+          }
+        });
+      }
+
+      return;
+    }
+
     if(state.page==='cart'){
       const total = state.cart.reduce((sum, item) => sum + Number(item.product.unit_price || 0) * item.quantity, 0);
 
@@ -408,7 +1137,7 @@
             <p>عدد الوحدات: <strong>${state.cart.reduce((sum, item) => sum + item.quantity, 0)}</strong></p>
             <div class="cart-total">${total.toLocaleString('ar-EG')} جنيه</div>
             <button class="primary" id="checkoutBtn" type="button">متابعة إتمام الطلب</button>
-            <small class="hint">إتمام الطلب والدفع الإلكتروني لم يتم تفعيلهما بعد.</small>
+            <small class="hint">تأكيد الطلب يتطلب دفع عربون 30% ومراجعته من إدارة GOZORX. المتبقي 70% عند الاستلام.</small>
           </aside>
         </div>
       ` : '<div class="panel empty">سلة المشتريات فارغة حاليًا. تصفح السوق وأضف المنتجات التي تحتاجها.</div><button class="primary" data-page="market">تصفح السوق</button>';
@@ -524,7 +1253,14 @@
           saveSession(data);
           updateAccountArea();
           notify('تم تسجيل الدخول بنجاح');
-          go('home');
+          const shouldReturnToCheckout = state.returnToCheckout;
+          state.returnToCheckout = false;
+
+          if (shouldReturnToCheckout) {
+            go('checkout');
+          } else if (!(await restoreCurrentOrder(true))) {
+            go('home');
+          }
         } catch (error) {
           notify(error.message);
         } finally {
@@ -581,7 +1317,14 @@
           saveSession(data);
           updateAccountArea();
           notify('تم إنشاء حسابك بنجاح');
-          go('home');
+          const shouldReturnToCheckout = state.returnToCheckout;
+          state.returnToCheckout = false;
+
+          if (shouldReturnToCheckout) {
+            go('checkout');
+          } else if (!(await restoreCurrentOrder(true))) {
+            go('home');
+          }
         } catch (error) {
           notify(error.message);
         } finally {
@@ -601,6 +1344,42 @@
     app.innerHTML=shell('قريبًا','هذه الوظيفة ضمن مراحل تطوير GOZORX.','<div class="panel">سيتم تفعيلها بعد تجهيز الخادم وقاعدة البيانات.</div>');
   }
   document.addEventListener('click', async e=>{
+    const refreshOrders = e.target.closest('[data-my-orders-action]');
+    if (refreshOrders) {
+      await loadMyOrders();
+      return;
+    }
+
+    const myOrderButton = e.target.closest('[data-my-order-id]');
+    if (myOrderButton) {
+      await openMyOrder(myOrderButton.dataset.myOrderId, myOrderButton);
+      return;
+    }
+
+    if (e.target.closest('[data-open-order-payment]')) {
+      if (state.currentOrder) go('order-payment');
+      return;
+    }
+
+    const adminOrdersAction = e.target.closest('[data-admin-orders-action]');
+    if (adminOrdersAction) {
+      const action = adminOrdersAction.dataset.adminOrdersAction;
+
+      if (action === 'back') {
+        state.currentAdminOrder = null;
+        go('admin-orders');
+      } else if (action === 'refresh' || action === 'search') {
+        await loadAdminOrders();
+      }
+      return;
+    }
+
+    const adminOrderButton = e.target.closest('[data-admin-order-id]');
+    if (adminOrderButton) {
+      await openAdminOrder(adminOrderButton.dataset.adminOrderId, adminOrderButton);
+      return;
+    }
+
     const adminButton = e.target.closest('[data-admin-action]');
     if (adminButton) {
       await handleAdminPaymentAction(
@@ -641,7 +1420,17 @@
     }
 
     if(e.target.closest('#checkoutBtn')){
-      notify('إتمام الطلب والدفع قيد التطوير');
+      if(!state.cart.length){
+        notify('سلة المشتريات فارغة');
+        return;
+      }
+      if(!state.token || !state.user){
+        state.returnToCheckout = true;
+        notify('سجّل الدخول أولًا لمتابعة الطلب');
+        go('login');
+        return;
+      }
+      go('checkout');
       return;
     }
 
@@ -684,4 +1473,8 @@
   updateCartCount();
   updateAccountArea();
   go('home');
+
+  if (state.token && localStorage.getItem('gozorx_current_order_id')) {
+    restoreCurrentOrder(true);
+  }
 })();

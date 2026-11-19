@@ -260,3 +260,304 @@
     width: 100%;
   }
 }
+
+
+
+/* GOZORX Checkout and Order Payment */
+.checkout-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, .9fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.checkout-layout > .panel {
+  margin-bottom: 0;
+}
+
+.checkout-layout form h3,
+.order-payment-summary h3 {
+  color: var(--green);
+  margin-top: 0;
+}
+
+.checkout-summary {
+  position: sticky;
+  top: 105px;
+}
+
+.checkout-summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.checkout-summary-item strong {
+  color: var(--green2);
+  white-space: nowrap;
+}
+
+.checkout-summary-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 0;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--green);
+}
+
+.checkout-summary-total strong {
+  font-size: 19px;
+}
+
+.payment-notice {
+  padding: 16px;
+  border: 1px solid #e7dfbd;
+  border-radius: 12px;
+  background: #fff9e9;
+  color: #705b24;
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.payment-notice p {
+  margin: 6px 0 0;
+}
+
+.order-payment-summary {
+  max-width: 850px;
+}
+
+.order-payment-summary p {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 11px 0;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.order-payment-summary p strong {
+  color: var(--green);
+  text-align: left;
+}
+
+#depositReceiptForm {
+  max-width: 850px;
+  margin-top: 18px;
+}
+
+#depositReceiptForm input[type="file"] {
+  background: #fafbf8;
+}
+
+#placeOrderBtn,
+#uploadReceiptBtn {
+  min-height: 46px;
+}
+
+@media(max-width: 750px) {
+  .checkout-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .checkout-summary {
+    position: static;
+  }
+
+  .order-payment-summary p {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .order-payment-summary p strong {
+    text-align: right;
+  }
+}
+
+
+/* GOZORX Official Payment Account */
+.payment-account-card {
+  margin: 18px 0;
+  padding: 22px;
+  border: 1px solid #dce8df;
+  border-radius: 16px;
+  background: #f8fbf8;
+}
+
+.payment-account-card h3 {
+  color: #176b3a;
+  margin: 0 0 10px;
+}
+
+.payment-account-card > p {
+  color: #647067;
+  margin-bottom: 18px;
+}
+
+.payment-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid #e3ebe5;
+}
+
+.payment-account-row span {
+  color: #68756c;
+}
+
+.payment-account-row strong {
+  color: #183d29;
+  overflow-wrap: anywhere;
+}
+
+#copyPaymentDetailsBtn {
+  margin-top: 18px;
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .payment-account-card {
+    padding: 16px;
+  }
+
+  .payment-account-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
+
+/* GOZORX MY ORDERS */
+.my-orders-toolbar,
+.my-order-heading,
+.my-order-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.my-orders-toolbar { margin-bottom: 16px; }
+.my-orders-toolbar p { color: var(--muted); margin: 0; font-size: 13px; }
+.my-order-card { padding: 20px; }
+.my-order-heading { margin-bottom: 18px; }
+.my-order-heading h3 { margin: 4px 0 0; color: var(--green); }
+.my-order-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.my-order-grid div { display: grid; gap: 5px; }
+.my-order-grid span { color: var(--muted); font-size: 11px; }
+.my-order-grid strong { color: var(--green); font-size: 14px; }
+.my-order-receipt { color: var(--muted); font-size: 13px; }
+.my-order-receipt strong { color: var(--ink); }
+@media (max-width: 760px) {
+  .my-order-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .my-orders-toolbar { align-items: flex-start; }
+}
+@media (max-width: 420px) {
+  .my-order-grid strong { font-size: 12px; }
+}
+
+
+/* GOZORX Admin Orders */
+.admin-orders-toolbar {
+  margin-bottom: 18px;
+}
+
+.admin-orders-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-orders-filters input {
+  flex: 1 1 260px;
+  min-width: 180px;
+}
+
+.admin-orders-filters select {
+  flex: 0 1 210px;
+  min-width: 160px;
+}
+
+.admin-order-card,
+.admin-order-detail,
+.admin-order-supplier {
+  margin-bottom: 16px;
+}
+
+.admin-order-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.admin-order-heading h3 {
+  margin: 4px 0 0;
+}
+
+.admin-order-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.admin-order-grid > div {
+  padding: 10px;
+  background: var(--surface, #f7f8f6);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.admin-order-grid > div span,
+.admin-order-grid > div strong {
+  display: block;
+}
+
+.admin-order-grid > div span {
+  color: var(--muted);
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+
+.admin-order-supplier ul {
+  padding-right: 22px;
+  line-height: 2;
+}
+
+@media (max-width: 600px) {
+  .admin-orders-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-orders-filters input,
+  .admin-orders-filters select,
+  .admin-orders-filters button {
+    width: 100%;
+  }
+
+  .admin-order-grid {
+    grid-template-columns: 1fr;
+  }
+}

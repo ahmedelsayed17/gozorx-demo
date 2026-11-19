@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\PaymentTransaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -108,6 +109,73 @@ class PaymentAdminReviewTest extends TestCase
             'status' => 'confirmed',
             'payment_status' => 'partially_paid',
             'balance_amount' => 700,
+        ]);
+    }
+
+    public function test_approving_deposit_keeps_reserved_stock_unchanged(): void
+    {
+        Storage::fake('local');
+
+        $data = $this->createPayment();
+
+        $supplierUser = User::factory()->create();
+
+        $supplier = $supplierUser->supplierProfile()->create([
+            'business_name' => 'Stock Test Nursery',
+            'status' => 'approved',
+        ]);
+
+        $product = Product::create([
+            'supplier_id' => $supplier->id,
+            'name_ar' => 'شتلة مانجو',
+            'unit_name' => 'شتلة',
+            'unit_price' => 100,
+            'minimum_order_quantity' => 5,
+            'available_quantity' => 100,
+            'status' => 'published',
+        ]);
+
+        $product->reserved_quantity = 10;
+        $product->save();
+
+        $supplierOrder = $data['order']->supplierOrders()->create([
+            'supplier_id' => $supplier->id,
+            'status' => 'pending',
+            'subtotal' => 1000,
+            'shipping_total' => 0,
+            'grand_total' => 1000,
+        ]);
+
+        $supplierOrder->items()->create([
+            'product_id' => $product->id,
+            'product_name_ar' => 'شتلة مانجو',
+            'unit_name' => 'شتلة',
+            'unit_price' => 100,
+            'quantity' => 10,
+            'line_total' => 1000,
+        ]);
+
+        $response = $this->actingAs($data['admin'], 'sanctum')
+            ->patchJson(
+                '/api/v1/admin/payments/deposit-receipts/' .
+                $data['payment']->id . '/decision',
+                ['decision' => 'approved']
+            );
+
+        $response->assertOk()
+            ->assertJsonPath('result.order_status', 'confirmed')
+            ->assertJsonPath('result.payment_status', 'partially_paid');
+
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'available_quantity' => 100,
+            'reserved_quantity' => 10,
+        ]);
+
+        $this->assertDatabaseHas('supplier_orders', [
+            'id' => $supplierOrder->id,
+            'status' => 'pending',
+            'stock_released_at' => null,
         ]);
     }
 
