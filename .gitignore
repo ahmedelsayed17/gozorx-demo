@@ -1,0 +1,38 @@
+# Laravel environment and secrets
+.env
+.env.*
+!.env.example
+auth.json
+
+# Dependencies
+/vendor/
+/node_modules/
+
+# Laravel runtime files
+/backend/laravel-framework/storage/logs/*
+/backend/laravel-framework/storage/framework/cache/*
+/backend/laravel-framework/storage/framework/sessions/*
+/backend/laravel-framework/storage/framework/views/*
+/backend/laravel-framework/bootstrap/cache/*
+
+# Uploaded files and local databases
+/backend/laravel-framework/storage/app/private/*
+/backend/laravel-framework/database/*.sqlite
+/backend/laravel-framework/database/*.sqlite-*
+
+# Build and editor files
+/backend/laravel-framework/public/build/
+/backend/laravel-framework/public/hot
+.DS_Store
+.idea/
+.vscode/
+
+# Temporary backups
+*.backup
+*.bak
+*.tmp
+*.log
+.phpunit.result.cache
+
+# Obsolete empty migration backups
+/backend/laravel-framework/database/backups/
