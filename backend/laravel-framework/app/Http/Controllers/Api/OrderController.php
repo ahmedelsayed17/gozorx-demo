@@ -208,7 +208,7 @@ class OrderController extends Controller
             404
         );
 
-        $order->load('supplierOrders.items');
+        $order->load('supplierOrders.items', 'supplierOrders.supplier.user');
 
         $depositTransaction = $order->paymentTransactions()
             ->where('payment_type', 'deposit')

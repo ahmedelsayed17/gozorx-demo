@@ -715,6 +715,48 @@
           escapeAdminHtml(payment.review_note) + '</p></div>'
         : '';
 
+      const supplierOrders = Array.isArray(order.supplier_orders)
+        ? order.supplier_orders
+        : (Array.isArray(order.supplierOrders) ? order.supplierOrders : []);
+
+      const supplierSections = supplierOrders.length
+        ? supplierOrders.map((supplierOrder, index) => {
+            const supplier = supplierOrder.supplier || {};
+            const supplierUser = supplier.user || {};
+            const items = Array.isArray(supplierOrder.items) ? supplierOrder.items : [];
+            const supplierName = supplier.business_name ||
+              supplierUser.full_name || supplierUser.name || 'مورد';
+
+            return `
+              <section class="panel admin-order-supplier">
+                <h3>طلب المورد ${index + 1}</h3>
+                <p><strong>اسم المورد:</strong> ${escapeAdminHtml(supplierName)}</p>
+                <p><strong>حالة طلب المورد:</strong> ${escapeAdminHtml(
+                  labels[supplierOrder.status] || supplierOrder.status || 'غير محدد'
+                )}</p>
+                <p><strong>إجمالي طلب المورد:</strong> ${Number(
+                  supplierOrder.grand_total || supplierOrder.subtotal || 0
+                ).toLocaleString('ar-EG')} جنيه</p>
+                ${
+                  items.length
+                    ? `<ul>${items.map(item => `
+                        <li>
+                          <strong>${escapeAdminHtml(
+                            item.product_name_ar || item.product_name_en || item.product_name || 'منتج'
+                          )}</strong>
+                          — الكمية: ${Number(item.quantity || 0)}
+                          ${escapeAdminHtml(item.unit_name || 'وحدة')}
+                          — سعر الوحدة: ${Number(item.unit_price || 0).toLocaleString('ar-EG')} جنيه
+                          — الإجمالي: ${Number(item.line_total || 0).toLocaleString('ar-EG')} جنيه
+                        </li>
+                      `).join('')}</ul>`
+                    : '<p>لا توجد أصناف مسجلة لهذا المورد.</p>'
+                }
+              </section>
+            `;
+          }).join('')
+        : '<div class="panel empty">لا توجد تفاصيل أصناف متاحة لهذا الطلب حاليًا.</div>';
+
       app.innerHTML = shell(
         'تفاصيل الطلب',
         'رقم الطلب: ' + escapeAdminHtml(order.order_number || order.id),
@@ -728,6 +770,8 @@
             <p>حالة الإيصال: <strong>${receiptStatus}</strong></p>
           </div>
           ${reviewNote}
+          <h3>تفاصيل الموردين والمنتجات</h3>
+          ${supplierSections}
           <div class="my-order-actions">
             ${order.status === 'pending_payment' ? '<button class="primary" data-open-order-payment>متابعة العربون</button>' : ''}
             <button class="outline" data-page="my-orders">العودة إلى طلباتي</button>
@@ -1022,14 +1066,36 @@
         </div>
       `;
 
-      const receiptSection = paymentDetails + (order.receipt_uploaded
-        ? '<div class="payment-notice"><strong>تم استلام إيصال التحويل.</strong><p>الإيصال بانتظار مراجعة الإدارة. الطلب لم يتأكد بعد.</p></div>'
-        : `
+      const payment = order.deposit_transaction || null;
+      const paymentStatus = payment?.status ||
+        (order.receipt_uploaded ? 'pending' : null);
+
+      const rejectedNotice = paymentStatus === 'rejected'
+        ? `<div class="payment-notice">
+            <strong>تم رفض إيصال التحويل السابق.</strong>
+            <p>سبب الرفض: ${escapeAdminHtml(payment?.review_note || 'يرجى مراجعة الإدارة.')}</p>
+            <p>يمكنك رفع إيصال جديد خلال المهلة المتبقية.</p>
+          </div>`
+        : '';
+
+      let receiptSection = '';
+
+      if (order.status !== 'pending_payment') {
+        receiptSection = paymentStatus === 'approved'
+          ? '<div class="payment-notice"><strong>تم اعتماد العربون وتأكيد الطلب.</strong></div>'
+          : '<div class="payment-notice">الطلب لم يعد في حالة انتظار العربون، ولا يمكن رفع إيصال جديد.</div>';
+      } else if (paymentStatus === 'approved') {
+        receiptSection = '<div class="payment-notice"><strong>تم اعتماد العربون وتأكيد الطلب.</strong><p>تم قبول الإيصال من الإدارة.</p></div>';
+      } else if (paymentStatus === 'pending' && order.receipt_uploaded) {
+        receiptSection = '<div class="payment-notice"><strong>تم استلام إيصال التحويل.</strong><p>الإيصال بانتظار مراجعة الإدارة. الطلب لم يتأكد بعد.</p></div>';
+      } else {
+        receiptSection = paymentDetails + rejectedNotice + `
           <form class="panel form-grid" id="depositReceiptForm">
-            <h3 class="field full">رفع إيصال العربون بعد التحويل</h3>
+            <h3 class="field full">${paymentStatus === 'rejected' ? 'رفع إيصال بديل' : 'رفع إيصال العربون بعد التحويل'}</h3>
             <div class="field full">
               <label>رقم العملية (اختياري)</label>
-              <input name="transaction_reference" maxlength="160">
+              <input name="transaction_reference" maxlength="160"
+                value="${escapeAdminHtml(payment?.transaction_reference || '')}">
             </div>
             <div class="field full">
               <label>صورة أو ملف الإيصال</label>
@@ -1040,7 +1106,8 @@
               <button class="primary" type="submit" id="uploadReceiptBtn">رفع إيصال التحويل</button>
             </div>
           </form>
-        `);
+        `;
+      }
 
       app.innerHTML = shell(
         'تفاصيل الطلب والعربون',
@@ -1055,10 +1122,15 @@
           <p>آخر موعد لمراجعة العربون: <strong>${expiry}</strong></p>
         </div>
         ${receiptSection}
-        <div class="payment-notice">
-          رفع الإيصال لا يعني تأكيد الدفع. ستظل الكميات محجوزة لمدة 24 ساعة، ويصبح الطلب مؤكدًا بعد اعتماد الإدارة للعربون.
+        ${order.status === 'pending_payment' ? `
+          <div class="payment-notice">
+            رفع الإيصال لا يعني تأكيد الدفع. ستظل الكميات محجوزة لمدة 24 ساعة من إنشاء الطلب، ويصبح الطلب مؤكدًا بعد اعتماد الإدارة للعربون.
+          </div>
+        ` : ''}
+        <div class="my-order-actions">
+          <button class="outline" data-page="order-details">العودة إلى تفاصيل الطلب</button>
+          <button class="outline" data-page="my-orders">طلباتي</button>
         </div>
-        <button class="outline" data-page="market">العودة إلى السوق</button>
         `
       );
 
@@ -1088,7 +1160,7 @@
           uploadButton.textContent = 'جارٍ رفع الإيصال...';
 
           try {
-            await apiRequest(
+            const uploadResult = await apiRequest(
               `/orders/${encodeURIComponent(order.id)}/deposit-receipt`,
               {
                 method: 'POST',
@@ -1096,7 +1168,26 @@
               }
             );
 
-            state.currentOrder.receipt_uploaded = true;
+            try {
+              const refreshed = await apiRequest(
+                `/orders/${encodeURIComponent(order.id)}`
+              );
+              state.currentOrder = refreshed.order;
+            } catch (refreshError) {
+              console.warn('Order refresh after receipt upload failed:', refreshError);
+              state.currentOrder = {
+                ...state.currentOrder,
+                receipt_uploaded: true,
+                deposit_transaction: {
+                  ...(state.currentOrder.deposit_transaction || {}),
+                  status: uploadResult.payment?.status || 'pending',
+                  transaction_reference:
+                    uploadResult.payment?.transaction_reference || null,
+                  receipt_uploaded: true
+                }
+              };
+            }
+
             notify('تم استلام الإيصال وهو بانتظار مراجعة الإدارة');
             go('order-payment');
           } catch(error) {
