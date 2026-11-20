@@ -43,6 +43,62 @@ class ExpireUnpaidOrders extends Command
                                 return false;
                             }
 
+                            $depositTransaction = $order->paymentTransactions()
+                                ->where('payment_type', 'deposit')
+                                ->lockForUpdate()
+                                ->first();
+
+                            if (
+                                $depositTransaction &&
+                                $depositTransaction->status === 'pending' &&
+                                $depositTransaction->receipt_path &&
+                                $depositTransaction->receipt_uploaded_at &&
+                                $depositTransaction->receipt_uploaded_at->lte(
+                                    $order->deposit_expires_at
+                                )
+                            ) {
+                                return false;
+                            }
+
+                            $individualItem = $order->individualItem()
+                                ->lockForUpdate()
+                                ->first();
+
+                            if ($individualItem) {
+                                if ($order->stock_released_at === null) {
+                                    if ($individualItem->product_id !== null) {
+                                        $product = Product::query()
+                                            ->whereKey($individualItem->product_id)
+                                            ->lockForUpdate()
+                                            ->first();
+
+                                        if ($product) {
+                                            $quantity = (int) $individualItem->quantity;
+                                            $reserved = (int) $product->reserved_quantity;
+
+                                            if ($reserved < $quantity) {
+                                                throw new RuntimeException(
+                                                    "Insufficient reserved stock for product {$product->id}"
+                                                );
+                                            }
+
+                                            $product->decrement(
+                                                'reserved_quantity',
+                                                $quantity
+                                            );
+                                        }
+                                    }
+
+                                    $order->stock_released_at = now();
+                                }
+
+                                $order->status = 'cancelled';
+                                $order->save();
+
+                                return true;
+                            }
+
+                            // Preserve the legacy supplier-order expiry workflow.
                             $supplierOrders = $order->supplierOrders()
                                 ->lockForUpdate()
                                 ->get();

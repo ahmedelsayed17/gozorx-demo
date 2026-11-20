@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\SupplierOrder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -24,7 +23,12 @@ class OrderController extends Controller
             'address' => ['required', 'string', 'max:1000'],
             'delivery_notes' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', 'distinct', 'exists:products,id'],
+            'items.*.product_id' => [
+                'required',
+                'integer',
+                'distinct',
+                'exists:products,id',
+            ],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
         ]);
 
@@ -34,19 +38,19 @@ class OrderController extends Controller
             ]);
         }
 
-        return DB::transaction(function () use ($validated, $request) {
+        $orders = DB::transaction(function () use ($validated, $request) {
             $productIds = collect($validated['items'])
                 ->pluck('product_id')
                 ->all();
 
-            $products = Product::whereIn('id', $productIds)
+            $products = Product::query()
+                ->whereIn('id', $productIds)
                 ->with('supplier')
                 ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
 
-            $itemsBySupplier = [];
-            $subtotal = 0;
+            $createdOrders = [];
 
             foreach ($validated['items'] as $item) {
                 $product = $products->get($item['product_id']);
@@ -58,7 +62,10 @@ class OrderController extends Controller
                     ]);
                 }
 
-                if (!$product->supplier || $product->supplier->status !== 'approved') {
+                if (
+                    !$product->supplier ||
+                    $product->supplier->status !== 'approved'
+                ) {
                     throw ValidationException::withMessages([
                         'items' => ['المورد الخاص بأحد المنتجات غير معتمد.'],
                     ]);
@@ -70,7 +77,7 @@ class OrderController extends Controller
                     ]);
                 }
 
-                if ($quantity < $product->minimum_order_quantity) {
+                if ($quantity < (int) $product->minimum_order_quantity) {
                     throw ValidationException::withMessages([
                         'items' => ['الكمية المطلوبة أقل من الحد الأدنى للمنتج.'],
                     ]);
@@ -85,96 +92,75 @@ class OrderController extends Controller
                     ]);
                 }
 
-                $lineTotal = (float) $product->unit_price * $quantity;
-                $subtotal += $lineTotal;
-
-                $itemsBySupplier[$product->supplier_id][] = [
-                    'product' => $product,
-                    'quantity' => $quantity,
-                    'line_total' => $lineTotal,
-                ];
-            }
-
-            $subtotal = round($subtotal, 2);
-            $shippingTotal = 0;
-            $grandTotal = round($subtotal + $shippingTotal, 2);
-            $depositAmount = round($grandTotal * 0.30, 2);
-            $balanceAmount = round($grandTotal - $depositAmount, 2);
-
-            $order = Order::create([
-                'buyer_id' => $request->user()->id,
-                'order_number' => 'GX-' . now()->format('ymd') . '-' . Str::upper(Str::random(8)),
-                'status' => 'pending_payment',
-                'payment_method' => $validated['payment_method'],
-                'payment_status' => 'pending',
-                'recipient_name' => $validated['recipient_name'],
-                'recipient_phone' => $validated['recipient_phone'],
-                'governorate' => $validated['governorate'],
-                'city' => $validated['city'],
-                'address' => $validated['address'],
-                'delivery_notes' => $validated['delivery_notes'] ?? null,
-                'subtotal' => $subtotal,
-                'shipping_total' => $shippingTotal,
-                'grand_total' => $grandTotal,
-                'deposit_amount' => $depositAmount,
-                'balance_amount' => $balanceAmount,
-                'deposit_expires_at' => now()->addHours(24),
-            ]);
-
-            $order->paymentTransactions()->create([
-                'payment_type' => 'deposit',
-                'payment_method' => $validated['payment_method'],
-                'amount' => $depositAmount,
-                'status' => 'pending',
-            ]);
-
-            foreach ($itemsBySupplier as $supplierId => $supplierItems) {
-                $supplierSubtotal = round(
-                    collect($supplierItems)->sum('line_total'),
+                $lineTotal = round(
+                    (float) $product->unit_price * $quantity,
                     2
                 );
 
-                $supplierOrder = $order->supplierOrders()->create([
-                    'supplier_id' => $supplierId,
-                    'status' => 'pending',
-                    'subtotal' => $supplierSubtotal,
+                // Every distinct product creates its own independent order.
+                $order = Order::create([
+                    'buyer_id' => $request->user()->id,
+                    'supplier_id' => $product->supplier_id,
+                    'order_number' => 'GX-' . now()->format('ymd') . '-' . Str::upper(Str::random(8)),
+                    'status' => 'pending_shipping_cost',
+                    'payment_method' => $validated['payment_method'],
+                    'payment_status' => 'pending',
+                    'recipient_name' => $validated['recipient_name'],
+                    'recipient_phone' => $validated['recipient_phone'],
+                    'governorate' => $validated['governorate'],
+                    'city' => $validated['city'],
+                    'address' => $validated['address'],
+                    'delivery_notes' => $validated['delivery_notes'] ?? null,
+                    'subtotal' => $lineTotal,
                     'shipping_total' => 0,
-                    'grand_total' => $supplierSubtotal,
+                    'grand_total' => 0,
+                    'deposit_amount' => 0,
+                    'balance_amount' => 0,
+                    'deposit_expires_at' => null,
+                    'shipping_cost_set_at' => null,
                 ]);
 
-                foreach ($supplierItems as $item) {
-                    $product = $item['product'];
-                    $quantity = $item['quantity'];
+                $order->individualItem()->create([
+                    'product_id' => $product->id,
+                    'product_name_ar' => $product->name_ar,
+                    'product_name_en' => $product->name_en,
+                    'unit_name' => $product->unit_name,
+                    'unit_price' => $product->unit_price,
+                    'quantity' => $quantity,
+                    'line_total' => $lineTotal,
+                ]);
 
-                    $supplierOrder->items()->create([
-                        'product_id' => $product->id,
-                        'product_name_ar' => $product->name_ar,
-                        'product_name_en' => $product->name_en,
-                        'unit_name' => $product->unit_name,
-                        'unit_price' => $product->unit_price,
-                        'quantity' => $quantity,
-                        'line_total' => $item['line_total'],
-                    ]);
-
-                    $product->increment('reserved_quantity', $quantity);
-                }
+                $createdOrders[] = $order;
             }
 
-            return response()->json([
-                'message' => 'تم إنشاء الطلب وحجز الكميات لمدة 24 ساعة.',
-                'order' => $order->load('supplierOrders.items'),
-            ], 201);
+            return collect($createdOrders);
         });
+
+              $orders->each(function ($order) {
+            $order->load([
+                'individualItem',
+                'supplier:id,business_name,business_type,description,status',
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'تم إنشاء طلب مستقل لكل منتج بنجاح. سيتم تحديد تكلفة الشحن لكل طلب بشكل منفصل.',
+            'orders' => $orders,
+        ], 201);
     }
 
     public function index(Request $request)
     {
         $orders = Order::query()
             ->where('buyer_id', $request->user()->id)
-            ->with([
-                'supplierOrders.items',
+           ->with([
+    'individualItem',
+    'supplier:id,business_name,business_type,description,status',
+    'supplierOrders.supplier:id,business_name,business_type,description,status',
+    'supplierOrders.items',
                 'paymentTransactions' => function ($query) {
-                    $query->where('payment_type', 'deposit')->latest('id');
+                    $query->where('payment_type', 'deposit')
+                        ->latest('id');
                 },
             ])
             ->latest('id')
@@ -182,7 +168,6 @@ class OrderController extends Controller
 
         $orders->each(function ($order) {
             $deposit = $order->paymentTransactions->first();
-
             $receiptUploaded = (bool) ($deposit?->receipt_path);
 
             $order->setAttribute('receipt_uploaded', $receiptUploaded);
@@ -207,8 +192,12 @@ class OrderController extends Controller
             (int) $order->buyer_id === (int) $request->user()->id,
             404
         );
-
-        $order->load('supplierOrders.items', 'supplierOrders.supplier.user');
+$order->load([
+    'individualItem',
+    'supplier:id,business_name,business_type,description,status',
+    'supplierOrders.supplier:id,business_name,business_type,description,status',
+    'supplierOrders.items',
+]);
 
         $depositTransaction = $order->paymentTransactions()
             ->where('payment_type', 'deposit')
@@ -230,5 +219,4 @@ class OrderController extends Controller
             'order' => $order,
         ]);
     }
-
 }

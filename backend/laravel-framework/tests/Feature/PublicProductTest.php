@@ -23,6 +23,7 @@ class PublicProductTest extends TestCase
             'name_ar' => 'شجرة مانجو',
             'unit_price' => 150,
             'minimum_order_quantity' => 5,
+            'available_quantity' => 100,
             'status' => 'published',
         ]);
 
@@ -30,6 +31,7 @@ class PublicProductTest extends TestCase
             'name_ar' => 'شجرة ليمون مسودة',
             'unit_price' => 100,
             'minimum_order_quantity' => 3,
+            'available_quantity' => 100,
             'status' => 'draft',
         ]);
 
@@ -44,6 +46,7 @@ class PublicProductTest extends TestCase
             'name_ar' => 'شجرة جوافة',
             'unit_price' => 120,
             'minimum_order_quantity' => 2,
+            'available_quantity' => 100,
             'status' => 'published',
         ]);
 
@@ -68,6 +71,7 @@ class PublicProductTest extends TestCase
             'name_ar' => 'شجرة مانجو',
             'unit_price' => 150,
             'minimum_order_quantity' => 5,
+            'available_quantity' => 100,
             'status' => 'published',
         ]);
 
@@ -75,6 +79,7 @@ class PublicProductTest extends TestCase
             'name_ar' => 'شجرة ليمون',
             'unit_price' => 100,
             'minimum_order_quantity' => 3,
+            'available_quantity' => 100,
             'status' => 'published',
         ]);
 

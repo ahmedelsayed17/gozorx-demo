@@ -112,8 +112,54 @@ class GozorxApiTest extends TestCase
         $this->assertDatabaseHas('products', [
             'name_ar' => 'شجرة مانجو',
             'unit_price' => 150,
+            'available_quantity' => 100,
             'status' => 'draft',
         ]);
+    }
+
+    public function test_approved_supplier_can_add_product_with_zero_stock(): void
+    {
+        $user = User::factory()->create();
+
+        $user->supplierProfile()->create([
+            'business_name' => 'Zero Stock Nursery',
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/supplier/products', [
+                'name_ar' => 'شتلة غير متاحة حاليًا',
+                'unit_name' => 'شتلة',
+                'unit_price' => 150,
+                'minimum_order_quantity' => 1,
+                'available_quantity' => 0,
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('products', [
+            'name_ar' => 'شتلة غير متاحة حاليًا',
+            'available_quantity' => 0,
+        ]);
+    }
+
+    public function test_supplier_must_provide_stock_quantity_when_adding_product(): void
+    {
+        $user = User::factory()->create();
+
+        $user->supplierProfile()->create([
+            'business_name' => 'Missing Stock Nursery',
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/supplier/products', [
+                'name_ar' => 'شتلة بدون كمية',
+                'unit_name' => 'شتلة',
+                'unit_price' => 150,
+                'minimum_order_quantity' => 1,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['available_quantity']);
     }
 
     public function test_admin_can_approve_supplier(): void

@@ -15,14 +15,23 @@ class SupplierOrder extends Model
         'subtotal',
         'shipping_total',
         'grand_total',
+        'deposit_amount',
+        'balance_amount',
         'cancellation_reason',
+        'shipping_cost_set_at',
+        'deposit_expires_at',
     ];
 
     protected $casts = [
         'subtotal' => 'decimal:2',
         'shipping_total' => 'decimal:2',
         'grand_total' => 'decimal:2',
+        'deposit_amount' => 'decimal:2',
+        'balance_amount' => 'decimal:2',
         'stock_released_at' => 'datetime',
+        'stock_committed_at' => 'datetime',
+        'shipping_cost_set_at' => 'datetime',
+        'deposit_expires_at' => 'datetime',
     ];
 
     public function order(): BelongsTo
@@ -38,5 +47,10 @@ class SupplierOrder extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function shippingHistories(): HasMany
+    {
+        return $this->hasMany(SupplierOrderShippingHistory::class);
     }
 }

@@ -101,10 +101,11 @@ class PaymentController extends Controller
                 }
 
                 $depositTransaction->update([
-                    'receipt_path' => $receiptPath,
-                    'transaction_reference' => $validated['transaction_reference'] ?? null,
-                    'status' => 'pending',
-                ]);
+    'receipt_path' => $receiptPath,
+    'receipt_uploaded_at' => now(),
+    'transaction_reference' => $validated['transaction_reference'] ?? null,
+    'status' => 'pending',
+]);
             });
         } catch (\Throwable $exception) {
             if ($receiptPath) {
@@ -212,10 +213,11 @@ class PaymentController extends Controller
 
             if (
                 !$order->deposit_expires_at ||
-                $order->deposit_expires_at->lte(now())
+                !$payment->receipt_uploaded_at ||
+                $payment->receipt_uploaded_at->gt($order->deposit_expires_at)
             ) {
                 throw ValidationException::withMessages([
-                    'order' => 'The deposit payment deadline has expired.',
+                    'order' => 'The receipt was not uploaded before the deposit payment deadline.',
                 ]);
             }
 
@@ -233,6 +235,10 @@ class PaymentController extends Controller
                 $order->status = 'confirmed';
                 $order->payment_status = 'partially_paid';
                 $order->save();
+
+                $order->supplierOrders()
+                    ->where('status', 'pending')
+                    ->update(['status' => 'confirmed']);
 
                 return [
                     'decision' => 'approved',

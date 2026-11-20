@@ -442,53 +442,135 @@
     }
   }
 
-  function renderAdminOrderDetails() {
-    if (!state.token || !state.user || state.user.role !== 'admin') {
-      app.innerHTML = shell(
-        'غير مصرح بالدخول',
-        'هذه الصفحة متاحة لحسابات الإدارة فقط.',
-        '<div class="panel"><button class="primary" data-page="login">تسجيل الدخول</button></div>'
-      );
-      return;
-    }
+ function renderAdminOrderDetails() {
+  if (!state.token || !state.user || state.user.role !== 'admin') {
+    app.innerHTML = shell(
+      'غير مصرح بالدخول',
+      'هذه الصفحة متاحة لحسابات الإدارة فقط.',
+      '<div class="panel"><button class="primary" data-page="login">تسجيل الدخول</button></div>'
+    );
+    return;
+  }
 
-    const order = state.currentAdminOrder;
-    if (!order) {
-      app.innerHTML = shell(
-        'تفاصيل الطلب',
-        'لم يتم تحميل بيانات الطلب.',
-        '<div class="panel"><button class="outline" data-page="admin-orders">العودة إلى إدارة الطلبات</button></div>'
-      );
-      return;
-    }
+  const order = state.currentAdminOrder;
 
-    const buyer = order.buyer || {};
-    const payment = order.deposit_transaction || null;
-    const statusLabel = adminOrderStatusLabels[order.status] || order.status || 'غير محدد';
-    const supplierOrders = Array.isArray(order.supplier_orders) ? order.supplier_orders :
-      (Array.isArray(order.supplierOrders) ? order.supplierOrders : []);
+  if (!order) {
+    app.innerHTML = shell(
+      'تفاصيل الطلب',
+      'لم يتم تحميل بيانات الطلب.',
+      '<div class="panel"><button class="outline" data-page="admin-orders">العودة إلى إدارة الطلبات</button></div>'
+    );
+    return;
+  }
 
-    const supplierSections = supplierOrders.length
-      ? supplierOrders.map((supplierOrder, index) => {
-          const supplier = supplierOrder.supplier || {};
-          const supplierUser = supplier.user || {};
-          const items = Array.isArray(supplierOrder.items) ? supplierOrder.items : [];
+  const buyer = order.buyer || {};
+  const payment = order.deposit_transaction || null;
+  const statusLabel = adminOrderStatusLabels[order.status] || order.status || 'غير محدد';
 
-          return `
-            <section class="panel admin-order-supplier">
-              <h3>طلب المورد ${index + 1}</h3>
-              <p><strong>المورد:</strong> ${escapeAdminHtml(supplier.business_name || supplierUser.full_name || supplierUser.name || '—')}</p>
-              <p><strong>حالة طلب المورد:</strong> ${escapeAdminHtml(adminOrderStatusLabels[supplierOrder.status] || supplierOrder.status || '—')}</p>
-              <p><strong>الإجمالي:</strong> ${Number(supplierOrder.grand_total || supplierOrder.subtotal || 0).toLocaleString('ar-EG')} جنيه</p>
-              ${items.length ? `<ul>${items.map(item => `
-                <li>${escapeAdminHtml(item.product_name_ar || item.product_name_en || item.product_name || 'منتج')}
-                — الكمية: ${Number(item.quantity || 0)}
-                — ${Number(item.line_total || 0).toLocaleString('ar-EG')} جنيه</li>
-              `).join('')}</ul>` : '<p>لا توجد تفاصيل أصناف متاحة.</p>'}
-            </section>
-          `;
-        }).join('')
-      : '<div class="panel">لا توجد تفاصيل طلبات موردين متاحة في البيانات.</div>';
+  const individualItem = order.individual_item || order.individualItem || null;
+  const individualSupplier = order.supplier || {};
+
+const individualSection = individualItem
+  ? `
+    <section class="panel admin-order-supplier">
+      <h3>تفاصيل المنتج</h3>
+
+      <p>
+        <strong>المورد:</strong>
+        ${escapeAdminHtml(individualSupplier.business_name || '—')}
+      </p>
+
+      <p>
+        <strong>اسم المنتج:</strong>
+        ${escapeAdminHtml(
+          individualItem.product_name_ar ||
+          individualItem.product_name_en ||
+          'منتج'
+        )}
+      </p>
+
+      <p>
+        <strong>الكمية:</strong>
+        ${Number(individualItem.quantity || 0)}
+        ${escapeAdminHtml(individualItem.unit_name || 'وحدة')}
+      </p>
+
+      <p>
+        <strong>سعر الوحدة:</strong>
+        ${Number(individualItem.unit_price || 0).toLocaleString('ar-EG')} جنيه
+      </p>
+
+      <p>
+        <strong>إجمالي المنتج:</strong>
+        ${Number(individualItem.line_total || 0).toLocaleString('ar-EG')} جنيه
+      </p>
+    </section>
+  `
+  : '';
+
+const supplierOrders = Array.isArray(order.supplier_orders)
+  ? order.supplier_orders
+  : (Array.isArray(order.supplierOrders) ? order.supplierOrders : []);
+
+const legacySupplierSections = supplierOrders.length
+  ? supplierOrders.map((supplierOrder, index) => {
+      const supplier = supplierOrder.supplier || {};
+      const supplierUser = supplier.user || {};
+      const items = Array.isArray(supplierOrder.items) ? supplierOrder.items : [];
+
+      return `
+        <section class="panel admin-order-supplier">
+          <h3>طلب المورد ${index + 1}</h3>
+
+          <p>
+            <strong>المورد:</strong>
+            ${escapeAdminHtml(
+              supplier.business_name ||
+              supplierUser.full_name ||
+              supplierUser.name ||
+              '—'
+            )}
+          </p>
+
+          <p>
+            <strong>حالة طلب المورد:</strong>
+            ${escapeAdminHtml(
+              adminOrderStatusLabels[supplierOrder.status] ||
+              supplierOrder.status ||
+              '—'
+            )}
+          </p>
+
+          <p>
+            <strong>الإجمالي:</strong>
+            ${Number(
+              supplierOrder.grand_total || supplierOrder.subtotal || 0
+            ).toLocaleString('ar-EG')} جنيه
+          </p>
+
+          ${
+            items.length
+              ? `<ul>${items.map(item => `
+                  <li>
+                    ${escapeAdminHtml(
+                      item.product_name_ar ||
+                      item.product_name_en ||
+                      item.product_name ||
+                      'منتج'
+                    )}
+                    — الكمية: ${Number(item.quantity || 0)}
+                    — ${Number(item.line_total || 0).toLocaleString('ar-EG')} جنيه
+                  </li>
+                `).join('')}</ul>`
+              : '<p>لا توجد تفاصيل أصناف متاحة.</p>'
+          }
+        </section>
+      `;
+    }).join('')
+  : '';
+
+const supplierSections = individualSection || legacySupplierSections ||
+  '<div class="panel">لا توجد تفاصيل طلبات موردين متاحة في البيانات.</div>';
 
     app.innerHTML = shell(
       'تفاصيل الطلب',
@@ -715,48 +797,77 @@
           escapeAdminHtml(payment.review_note) + '</p></div>'
         : '';
 
-      const supplierOrders = Array.isArray(order.supplier_orders)
-        ? order.supplier_orders
-        : (Array.isArray(order.supplierOrders) ? order.supplierOrders : []);
+ const individualItem = order.individual_item || order.individualItem || null;
+const individualSupplier = order.supplier || {};
 
-      const supplierSections = supplierOrders.length
-        ? supplierOrders.map((supplierOrder, index) => {
-            const supplier = supplierOrder.supplier || {};
-            const supplierUser = supplier.user || {};
-            const items = Array.isArray(supplierOrder.items) ? supplierOrder.items : [];
-            const supplierName = supplier.business_name ||
-              supplierUser.full_name || supplierUser.name || 'مورد';
+const individualSection = individualItem
+  ? `
+    <section class="panel admin-order-supplier">
+      <h3>تفاصيل المنتج</h3>
+      <p><strong>اسم المورد:</strong> ${escapeAdminHtml(
+        individualSupplier.business_name || 'مورد'
+      )}</p>
+      <p><strong>المنتج:</strong> ${escapeAdminHtml(
+        individualItem.product_name_ar ||
+        individualItem.product_name_en ||
+        'منتج'
+      )}</p>
+      <p><strong>الكمية:</strong> ${Number(individualItem.quantity || 0)}
+        ${escapeAdminHtml(individualItem.unit_name || 'وحدة')}</p>
+      <p><strong>سعر الوحدة:</strong> ${Number(
+        individualItem.unit_price || 0
+      ).toLocaleString('ar-EG')} جنيه</p>
+      <p><strong>إجمالي المنتج:</strong> ${Number(
+        individualItem.line_total || 0
+      ).toLocaleString('ar-EG')} جنيه</p>
+    </section>
+  `
+  : '';
 
-            return `
-              <section class="panel admin-order-supplier">
-                <h3>طلب المورد ${index + 1}</h3>
-                <p><strong>اسم المورد:</strong> ${escapeAdminHtml(supplierName)}</p>
-                <p><strong>حالة طلب المورد:</strong> ${escapeAdminHtml(
-                  labels[supplierOrder.status] || supplierOrder.status || 'غير محدد'
-                )}</p>
-                <p><strong>إجمالي طلب المورد:</strong> ${Number(
-                  supplierOrder.grand_total || supplierOrder.subtotal || 0
-                ).toLocaleString('ar-EG')} جنيه</p>
-                ${
-                  items.length
-                    ? `<ul>${items.map(item => `
-                        <li>
-                          <strong>${escapeAdminHtml(
-                            item.product_name_ar || item.product_name_en || item.product_name || 'منتج'
-                          )}</strong>
-                          — الكمية: ${Number(item.quantity || 0)}
-                          ${escapeAdminHtml(item.unit_name || 'وحدة')}
-                          — سعر الوحدة: ${Number(item.unit_price || 0).toLocaleString('ar-EG')} جنيه
-                          — الإجمالي: ${Number(item.line_total || 0).toLocaleString('ar-EG')} جنيه
-                        </li>
-                      `).join('')}</ul>`
-                    : '<p>لا توجد أصناف مسجلة لهذا المورد.</p>'
-                }
-              </section>
-            `;
-          }).join('')
-        : '<div class="panel empty">لا توجد تفاصيل أصناف متاحة لهذا الطلب حاليًا.</div>';
+const supplierOrders = Array.isArray(order.supplier_orders)
+  ? order.supplier_orders
+  : (Array.isArray(order.supplierOrders) ? order.supplierOrders : []);
 
+const legacySupplierSections = supplierOrders.length
+  ? supplierOrders.map((supplierOrder, index) => {
+      const supplier = supplierOrder.supplier || {};
+      const supplierUser = supplier.user || {};
+      const items = Array.isArray(supplierOrder.items) ? supplierOrder.items : [];
+      const supplierName = supplier.business_name ||
+        supplierUser.full_name || supplierUser.name || 'مورد';
+
+      return `
+        <section class="panel admin-order-supplier">
+          <h3>طلب المورد ${index + 1}</h3>
+          <p><strong>اسم المورد:</strong> ${escapeAdminHtml(supplierName)}</p>
+          <p><strong>حالة طلب المورد:</strong> ${escapeAdminHtml(
+            labels[supplierOrder.status] || supplierOrder.status || 'غير محدد'
+          )}</p>
+          <p><strong>إجمالي طلب المورد:</strong> ${Number(
+            supplierOrder.grand_total || supplierOrder.subtotal || 0
+          ).toLocaleString('ar-EG')} جنيه</p>
+          ${
+            items.length
+              ? `<ul>${items.map(item => `
+                  <li>
+                    <strong>${escapeAdminHtml(
+                      item.product_name_ar || item.product_name_en || item.product_name || 'منتج'
+                    )}</strong>
+                    — الكمية: ${Number(item.quantity || 0)}
+                    ${escapeAdminHtml(item.unit_name || 'وحدة')}
+                    — سعر الوحدة: ${Number(item.unit_price || 0).toLocaleString('ar-EG')} جنيه
+                    — الإجمالي: ${Number(item.line_total || 0).toLocaleString('ar-EG')} جنيه
+                  </li>
+                `).join('')}</ul>`
+              : '<p>لا توجد أصناف مسجلة لهذا المورد.</p>'
+          }
+        </section>
+      `;
+    }).join('')
+  : '';
+
+const supplierSections = individualSection || legacySupplierSections ||
+  '<div class="panel empty">لا توجد تفاصيل أصناف متاحة لهذا الطلب حاليًا.</div>';
       app.innerHTML = shell(
         'تفاصيل الطلب',
         'رقم الطلب: ' + escapeAdminHtml(order.order_number || order.id),

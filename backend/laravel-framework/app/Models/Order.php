@@ -5,11 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
     protected $fillable = [
         'buyer_id',
+        'supplier_id',
         'order_number',
         'status',
         'payment_method',
@@ -26,6 +28,9 @@ class Order extends Model
         'deposit_amount',
         'balance_amount',
         'deposit_expires_at',
+        'shipping_cost_set_at',
+        'stock_released_at',
+        'stock_committed_at',
     ];
 
     protected $casts = [
@@ -35,11 +40,34 @@ class Order extends Model
         'deposit_amount' => 'decimal:2',
         'balance_amount' => 'decimal:2',
         'deposit_expires_at' => 'datetime',
+        'shipping_cost_set_at' => 'datetime',
+        'stock_released_at' => 'datetime',
+        'stock_committed_at' => 'datetime',
     ];
 
     public function buyer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'buyer_id');
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(SupplierProfile::class, 'supplier_id');
+    }
+
+    public function individualItem(): HasOne
+    {
+        return $this->hasOne(IndividualOrderItem::class);
+    }
+
+    public function individualItems(): HasMany
+    {
+        return $this->hasMany(IndividualOrderItem::class);
+    }
+
+    public function shippingHistories(): HasMany
+    {
+        return $this->hasMany(OrderShippingHistory::class);
     }
 
     public function supplierOrders(): HasMany

@@ -30,6 +30,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/suppliers', [SupplierController::class, 'index']);
             Route::get('/orders', [AdminOrderController::class, 'index']);
             Route::get('/orders/{order}', [AdminOrderController::class, 'show']);
+            Route::patch('/orders/{order}/shipping-cost', [AdminOrderController::class, 'setShippingCost']);
             Route::get('/payments/deposit-receipts', [PaymentController::class, 'pendingDepositReceipts']);
             Route::get('/payments/deposit-receipts/{paymentTransaction}/receipt', [PaymentController::class, 'showDepositReceipt']);
             Route::patch('/payments/deposit-receipts/{paymentTransaction}/decision', [PaymentController::class, 'decideDeposit']);

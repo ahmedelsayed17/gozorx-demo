@@ -55,6 +55,7 @@ class PaymentAdminReviewTest extends TestCase
             'amount' => 300,
             'status' => 'pending',
             'receipt_path' => $path,
+            'receipt_uploaded_at' => now(),
         ]);
 
         return compact('buyer', 'admin', 'order', 'payment', 'path');
@@ -174,7 +175,7 @@ class PaymentAdminReviewTest extends TestCase
 
         $this->assertDatabaseHas('supplier_orders', [
             'id' => $supplierOrder->id,
-            'status' => 'pending',
+            'status' => 'confirmed',
             'stock_released_at' => null,
         ]);
     }
@@ -285,6 +286,62 @@ class PaymentAdminReviewTest extends TestCase
         $this->assertEquals('pending', $order->payment_status);
     }
 
+
+    public function test_admin_can_approve_receipt_uploaded_before_deadline_even_after_deadline(): void
+    {
+        $data = $this->createPayment();
+
+        $data['order']->update([
+            'deposit_expires_at' => now()->subMinute(),
+        ]);
+
+        $data['payment']->update([
+            'receipt_uploaded_at' => now()->subMinutes(2),
+        ]);
+
+        $response = $this->actingAs($data['admin'], 'sanctum')
+            ->patchJson(
+                '/api/v1/admin/payments/deposit-receipts/' .
+                $data['payment']->id . '/decision',
+                ['decision' => 'approved']
+            );
+
+        $response->assertOk()
+            ->assertJsonPath('result.decision', 'approved')
+            ->assertJsonPath('result.order_status', 'confirmed');
+    }
+
+    public function test_admin_cannot_approve_receipt_uploaded_after_deadline(): void
+    {
+        $data = $this->createPayment();
+
+        $data['order']->update([
+            'deposit_expires_at' => now()->subMinutes(2),
+        ]);
+
+        $data['payment']->update([
+            'receipt_uploaded_at' => now()->subMinute(),
+        ]);
+
+        $response = $this->actingAs($data['admin'], 'sanctum')
+            ->patchJson(
+                '/api/v1/admin/payments/deposit-receipts/' .
+                $data['payment']->id . '/decision',
+                ['decision' => 'approved']
+            );
+
+        $response->assertUnprocessable();
+
+        $this->assertDatabaseHas('payment_transactions', [
+            'id' => $data['payment']->id,
+            'status' => 'pending',
+        ]);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $data['order']->id,
+            'status' => 'pending_payment',
+        ]);
+    }
 
     public function test_admin_can_view_deposit_receipt_file(): void
     {
