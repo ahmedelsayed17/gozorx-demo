@@ -2,3 +2,562 @@
 :root{--green:#123d2b;--green2:#1d6846;--lime:#d7e8a5;--cream:#f7f8f2;--ink:#1d2b23;--muted:#69776e;--line:#e4e9e2}
 *{box-sizing:border-box}body{margin:0;background:#fff;color:var(--ink);font-family:'Cairo',Arial,sans-serif}button,a{font:inherit}button{cursor:pointer;border:0}.topbar{height:82px;padding:0 6%;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);position:sticky;top:0;background:#ffffffed;backdrop-filter:blur(10px);z-index:5}.brand{display:flex;align-items:center;gap:10px;color:var(--green);text-decoration:none;font-weight:900;font-size:20px;letter-spacing:.5px}.brand small{display:block;font-size:10px;color:var(--muted);font-weight:600;letter-spacing:0}.brandmark{width:42px;height:42px;background:var(--green);color:#fff;border-radius:13px;display:grid;place-items:center;font-size:24px}.topbar nav{display:flex;gap:28px}.topbar nav a{color:#425248;text-decoration:none;font-size:14px;font-weight:700}.actions{display:flex;gap:9px;align-items:center}.primary,.outline,.lang{padding:10px 18px;border-radius:10px;font-weight:800}.primary{background:var(--green);color:#fff}.primary:hover{background:var(--green2)}.outline{background:#fff;border:1px solid #b8c8bd;color:var(--green)}.lang{background:var(--cream);color:var(--green);padding:9px 12px}.big{padding:14px 22px}.hero{padding:70px 9% 58px;display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:30px;background:linear-gradient(120deg,#f6f8f1,#fff 65%);min-height:480px}.eyebrow{color:var(--green2);font-size:12px;font-weight:900;letter-spacing:.5px}.hero h1{font-size:clamp(34px,4.2vw,55px);line-height:1.35;margin:15px 0;color:var(--green);font-weight:900}.hero h1 em{font-style:normal;color:#86a64c}.hero p{color:var(--muted);max-width:580px;line-height:2;font-size:16px}.hero-actions{display:flex;gap:12px;margin:25px 0}.trust{display:flex;gap:18px;flex-wrap:wrap;color:#68776c;font-size:12px}.hero-art{height:340px;border-radius:34px;background:linear-gradient(145deg,#dfeacb,#a9c28b);position:relative;overflow:hidden;display:grid;place-items:center}.sun{position:absolute;width:180px;height:180px;border-radius:50%;background:#f8f2ce;top:35px;right:70px}.plant{position:relative;font-size:190px;filter:drop-shadow(0 15px 10px #355b3740);z-index:1}.art-card{position:absolute;bottom:22px;left:22px;background:#ffffffdd;padding:13px 18px;border-radius:13px;display:grid;color:var(--green)}.art-card span{font-size:11px;color:var(--muted)}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;padding:24px 9%;border-bottom:1px solid var(--line)}.stats div{padding:10px 20px;border-inline-start:1px solid var(--line)}.stats b,.stats span{display:block}.stats b{color:var(--green);font-size:16px}.stats span{font-size:12px;color:var(--muted);margin-top:4px}.section{padding:65px 9%}.section-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:25px}.section h2,.split-cta h2{font-size:30px;color:var(--green);margin:7px 0}.textbtn{background:none;color:var(--green2);font-weight:800}.category-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.category{border:1px solid var(--line);border-radius:17px;padding:22px;background:#fff;transition:.2s}.category:hover{transform:translateY(-4px);box-shadow:0 12px 35px #1b432015}.category span{font-size:32px}.category h3{font-size:15px;color:var(--green);line-height:1.7}.category p{font-size:12px;color:var(--muted);line-height:1.8}.split-cta{margin:10px 9% 25px;background:var(--green);color:#fff;border-radius:22px;padding:34px 5%;display:flex;align-items:center;justify-content:space-between}.split-cta h2{color:#fff}.split-cta p{max-width:650px;color:#d6e2d9;line-height:1.9}.split-cta .eyebrow{color:var(--lime)}.split-cta.light{background:#f2f6eb;color:var(--ink)}.split-cta.light h2{color:var(--green)}.split-cta.light p{color:var(--muted)}.split-cta.light .eyebrow{color:var(--green2)}.cta-icon{font-size:75px;opacity:.9}footer{margin-top:70px;padding:35px 9%;background:#0d2e21;color:#dce9df;display:flex;align-items:center;justify-content:space-between}footer .brand{color:#fff}footer .brand small{color:#c3d2c7}footer p{font-size:13px}footer>small{color:#a8b9ad}.page{padding:45px 8%;min-height:65vh;background:var(--cream)}.page-title{margin-bottom:25px}.page-title h1{color:var(--green);margin:5px 0;font-size:32px}.page-title p{color:var(--muted)}.panel{background:#fff;border:1px solid var(--line);border-radius:17px;padding:24px;margin-bottom:18px}.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}.field{display:grid;gap:6px}.field.full{grid-column:1/-1}.field label{font-size:13px;font-weight:800;color:#435348}.field input,.field select,.field textarea{width:100%;padding:12px;border:1px solid #dce4dc;border-radius:9px;font:inherit;background:#fff}.field textarea{min-height:100px}.hint{font-size:11px;color:var(--muted)}.product-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.product{border:1px solid var(--line);border-radius:15px;overflow:hidden;background:#fff}.product-img{height:150px;background:linear-gradient(140deg,#e8f0df,#c4d7b4);display:grid;place-items:center;font-size:60px}.product-body{padding:16px}.product-body h3{margin:0 0 7px;color:var(--green);font-size:16px}.product-body p{font-size:12px;color:var(--muted)}.price{font-weight:900;color:var(--green2);font-size:18px}.product-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin:10px 0}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}.toolbar input,.toolbar select{padding:10px;border:1px solid var(--line);border-radius:9px;font:inherit}.notice{padding:14px;border-radius:10px;background:#f0f6e9;color:#45623d;font-size:13px;line-height:1.8;margin-bottom:15px}.tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}.tabs button{background:#eaf0e9;color:var(--green);padding:9px 14px;border-radius:9px;font-weight:800}.tabs button.active{background:var(--green);color:#fff}.table{width:100%;border-collapse:collapse;font-size:13px}.table th,.table td{padding:13px;border-bottom:1px solid var(--line);text-align:right}.table th{color:var(--muted);background:#fafbf8}.status{display:inline-block;background:#fff4d8;color:#8b6815;border-radius:20px;padding:4px 9px;font-size:11px}.status.ok{background:#e4f3e8;color:#28643c}.toast{position:fixed;bottom:22px;left:22px;background:#173d2b;color:#fff;padding:13px 18px;border-radius:10px;opacity:0;transform:translateY(10px);transition:.2s;z-index:20}.toast.show{opacity:1;transform:translateY(0)}.empty{padding:30px;text-align:center;color:var(--muted)}.back{color:var(--green2);font-weight:800;background:none;margin-bottom:15px}
 @media(max-width:850px){.topbar{padding:0 4%;height:auto;min-height:72px;flex-wrap:wrap;padding-block:12px}.topbar nav{order:3;width:100%;justify-content:center;padding-top:10px;gap:18px}.actions{gap:5px}.actions button{padding:8px 10px;font-size:12px}.hero{grid-template-columns:1fr;padding:45px 7%}.hero-art{height:260px}.plant{font-size:140px}.stats{padding:20px 5%}.category-grid{grid-template-columns:repeat(2,1fr)}.section{padding:45px 6%}.product-grid{grid-template-columns:repeat(2,1fr)}footer{flex-wrap:wrap;gap:15px}}@media(max-width:520px){.hero-actions{flex-direction:column}.trust{gap:8px}.stats{grid-template-columns:1fr}.stats div{border-inline-start:0;border-bottom:1px solid var(--line)}.category-grid,.product-grid,.form-grid{grid-template-columns:1fr}.split-cta{margin-inline:4%;padding:25px;gap:10px}.cta-icon{font-size:45px}.section-head{align-items:start;gap:10px;flex-direction:column}.page{padding:30px 5%}footer{padding:28px 6%}.topbar nav a{font-size:12px}}
+
+/* Product details page */
+.product[data-product-id] {
+  cursor: pointer;
+  transition: transform .2s, box-shadow .2s;
+}
+.product[data-product-id]:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(18,61,43,.12);
+}
+.product-detail {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 28px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 24px;
+}
+.product-detail-image {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(140deg,#e8f0df,#c4d7b4);
+  font-size: 100px;
+}
+.product-detail-body h2 {
+  color: var(--green);
+  margin: 12px 0;
+  font-size: 26px;
+}
+.detail-category { color: var(--muted); }
+.detail-price {
+  color: var(--green2);
+  font-size: 25px;
+  font-weight: 900;
+  margin: 20px 0;
+}
+.detail-info {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+}
+.detail-info div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: var(--cream);
+  border-radius: 9px;
+}
+.detail-info span { color: var(--muted); }
+.detail-info strong { color: var(--green); }
+.detail-description {
+  margin: 22px 0;
+  line-height: 1.8;
+}
+.detail-back { margin-bottom: 18px; }
+@media(max-width:700px) {
+  .product-detail { grid-template-columns: 1fr; padding: 16px; }
+  .product-detail-image { min-height: 220px; }
+  .product-detail-body h2 { font-size: 21px; }
+}
+
+/* GOZORX Shopping Cart */
+.cart-button {
+  background: #edf4e8;
+  color: var(--green);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.cart-button span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  color: white;
+  font-size: 12px;
+}
+.cart-layout {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.cart-items {
+  display: grid;
+  gap: 14px;
+}
+.cart-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.cart-item-icon {
+  min-width: 65px;
+  height: 65px;
+  display: grid;
+  place-items: center;
+  background: #e8f0df;
+  border-radius: 12px;
+  font-size: 32px;
+}
+.cart-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.cart-item-info h3 {
+  color: var(--green);
+  margin: 0 0 7px;
+}
+.cart-item-info p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 5px 0;
+}
+.cart-quantity,
+.detail-quantity-label input {
+  width: 85px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 8px;
+}
+.cart-line-total {
+  color: var(--green2);
+  white-space: nowrap;
+}
+.cart-remove {
+  display: block;
+  color: #a33;
+  margin-top: 8px;
+}
+.cart-summary {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 22px;
+  position: sticky;
+  top: 20px;
+}
+.cart-summary h3 {
+  color: var(--green);
+  margin-top: 0;
+}
+.cart-total {
+  color: var(--green2);
+  font-size: 25px;
+  font-weight: 900;
+  margin: 20px 0;
+}
+.cart-summary .primary {
+  width: 100%;
+}
+.detail-quantity-label {
+  display: block;
+  margin: 18px 0;
+  color: var(--green);
+  font-weight: 700;
+}
+@media(max-width:750px) {
+  .cart-layout {
+    grid-template-columns: 1fr;
+  }
+  .cart-summary {
+    position: static;
+  }
+  .cart-item {
+    flex-wrap: wrap;
+  }
+  .cart-line-total {
+    width: 100%;
+    text-align: left;
+  }
+}
+
+/* GOZORX Admin Payment Review */
+.admin-payments-toolbar,
+.admin-payment-heading,
+.admin-payment-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-payments-toolbar {
+  margin-bottom: 18px;
+}
+
+.admin-payment-card {
+  margin-bottom: 16px;
+}
+
+.admin-payment-heading {
+  margin-bottom: 16px;
+}
+
+.admin-payment-heading h3 {
+  margin: 0;
+}
+
+.admin-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.admin-payment-grid > div {
+  padding: 10px;
+  background: var(--surface, #f7f8f6);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.admin-payment-actions {
+  justify-content: flex-start;
+  padding-top: 14px;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
+
+.admin-payment-actions button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+.admin-payment-actions .danger {
+  color: #b42318;
+  border-color: #b42318;
+}
+
+@media (max-width: 600px) {
+  .admin-payment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-payment-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-payment-actions button {
+    width: 100%;
+  }
+}
+
+
+
+/* GOZORX Checkout and Order Payment */
+.checkout-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, .9fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.checkout-layout > .panel {
+  margin-bottom: 0;
+}
+
+.checkout-layout form h3,
+.order-payment-summary h3 {
+  color: var(--green);
+  margin-top: 0;
+}
+
+.checkout-summary {
+  position: sticky;
+  top: 105px;
+}
+
+.checkout-summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.checkout-summary-item strong {
+  color: var(--green2);
+  white-space: nowrap;
+}
+
+.checkout-summary-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 0;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--green);
+}
+
+.checkout-summary-total strong {
+  font-size: 19px;
+}
+
+.payment-notice {
+  padding: 16px;
+  border: 1px solid #e7dfbd;
+  border-radius: 12px;
+  background: #fff9e9;
+  color: #705b24;
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.payment-notice p {
+  margin: 6px 0 0;
+}
+
+.order-payment-summary {
+  max-width: 850px;
+}
+
+.order-payment-summary p {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 11px 0;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.order-payment-summary p strong {
+  color: var(--green);
+  text-align: left;
+}
+
+#depositReceiptForm {
+  max-width: 850px;
+  margin-top: 18px;
+}
+
+#depositReceiptForm input[type="file"] {
+  background: #fafbf8;
+}
+
+#placeOrderBtn,
+#uploadReceiptBtn {
+  min-height: 46px;
+}
+
+@media(max-width: 750px) {
+  .checkout-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .checkout-summary {
+    position: static;
+  }
+
+  .order-payment-summary p {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .order-payment-summary p strong {
+    text-align: right;
+  }
+}
+
+
+/* GOZORX Official Payment Account */
+.payment-account-card {
+  margin: 18px 0;
+  padding: 22px;
+  border: 1px solid #dce8df;
+  border-radius: 16px;
+  background: #f8fbf8;
+}
+
+.payment-account-card h3 {
+  color: #176b3a;
+  margin: 0 0 10px;
+}
+
+.payment-account-card > p {
+  color: #647067;
+  margin-bottom: 18px;
+}
+
+.payment-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid #e3ebe5;
+}
+
+.payment-account-row span {
+  color: #68756c;
+}
+
+.payment-account-row strong {
+  color: #183d29;
+  overflow-wrap: anywhere;
+}
+
+#copyPaymentDetailsBtn {
+  margin-top: 18px;
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .payment-account-card {
+    padding: 16px;
+  }
+
+  .payment-account-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
+
+/* GOZORX MY ORDERS */
+.my-orders-toolbar,
+.my-order-heading,
+.my-order-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.my-orders-toolbar { margin-bottom: 16px; }
+.my-orders-toolbar p { color: var(--muted); margin: 0; font-size: 13px; }
+.my-order-card { padding: 20px; }
+.my-order-heading { margin-bottom: 18px; }
+.my-order-heading h3 { margin: 4px 0 0; color: var(--green); }
+.my-order-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.my-order-grid div { display: grid; gap: 5px; }
+.my-order-grid span { color: var(--muted); font-size: 11px; }
+.my-order-grid strong { color: var(--green); font-size: 14px; }
+.my-order-receipt { color: var(--muted); font-size: 13px; }
+.my-order-receipt strong { color: var(--ink); }
+@media (max-width: 760px) {
+  .my-order-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .my-orders-toolbar { align-items: flex-start; }
+}
+@media (max-width: 420px) {
+  .my-order-grid strong { font-size: 12px; }
+}
+
+
+/* GOZORX Admin Orders */
+.admin-orders-toolbar {
+  margin-bottom: 18px;
+}
+
+.admin-orders-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-orders-filters input {
+  flex: 1 1 260px;
+  min-width: 180px;
+}
+
+.admin-orders-filters select {
+  flex: 0 1 210px;
+  min-width: 160px;
+}
+
+.admin-order-card,
+.admin-order-detail,
+.admin-order-supplier {
+  margin-bottom: 16px;
+}
+
+.admin-order-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.admin-order-heading h3 {
+  margin: 4px 0 0;
+}
+
+.admin-order-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.admin-order-grid > div {
+  padding: 10px;
+  background: var(--surface, #f7f8f6);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.admin-order-grid > div span,
+.admin-order-grid > div strong {
+  display: block;
+}
+
+.admin-order-grid > div span {
+  color: var(--muted);
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+
+.admin-order-supplier ul {
+  padding-right: 22px;
+  line-height: 2;
+}
+
+@media (max-width: 600px) {
+  .admin-orders-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-orders-filters input,
+  .admin-orders-filters select,
+  .admin-orders-filters button {
+    width: 100%;
+  }
+
+  .admin-order-grid {
+    grid-template-columns: 1fr;
+  }
+}
