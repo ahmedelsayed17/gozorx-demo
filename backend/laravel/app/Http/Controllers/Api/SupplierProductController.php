@@ -17,7 +17,7 @@ class SupplierProductController extends Controller
             'unit_name' => ['required','string','max:50'],
             'unit_price' => ['required','numeric','min:0'],
             'minimum_order_quantity' => ['required','integer','min:1'],
-            'available_quantity' => ['nullable','integer','min:0'],
+            'available_quantity' => ['required','integer','min:0'],
         ]);
 
         $supplier = $request->user()->supplierProfile;

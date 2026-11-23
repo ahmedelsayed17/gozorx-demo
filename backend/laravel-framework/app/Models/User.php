@@ -50,4 +50,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Order::class, 'buyer_id');
     }
+
+    public function rfqRequests(): HasMany
+    {
+        return $this->hasMany(RfqRequest::class, 'buyer_id');
+    }
 }

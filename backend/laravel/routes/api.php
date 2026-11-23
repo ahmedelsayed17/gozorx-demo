@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\SupplierDocumentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\SupplierProductController;
@@ -14,10 +15,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
 
         Route::post('/supplier/apply', [SupplierController::class, 'apply']);
+        Route::post('/supplier/documents/{documentType}/reupload', [SupplierDocumentController::class, 'reupload']);
         Route::middleware('role:admin')->prefix('admin')->group(function () {
             Route::get('/suppliers', [SupplierController::class, 'index']);
             Route::patch('/suppliers/{supplier}/decision', [SupplierController::class, 'decide']);
-        });
+            Route::patch('/supplier-documents/{document}/decision', [SupplierDocumentController::class, 'decide']);
+            });
 
         Route::middleware('supplier.approved')->group(function () {
             Route::post('/supplier/products', [SupplierProductController::class, 'store']);

@@ -26,7 +26,7 @@ return new class extends Migration {
         Schema::create('audit_logs', function (Blueprint $table) {
             $table->id(); $table->foreignId('actor_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('action',120); $table->string('entity_type',100); $table->unsignedBigInteger('entity_id')->nullable();
-            $table->jsonb('details')->default('{}'); $table->ipAddress('ip_address')->nullable(); $table->timestampTz('created_at')->useCurrent();
+          $table->jsonb('details'); $table->ipAddress('ip_address')->nullable(); $table->timestampTz('created_at')->useCurrent();
             $table->index(['entity_type','entity_id']); $table->index(['actor_user_id','created_at']);
         });
     }

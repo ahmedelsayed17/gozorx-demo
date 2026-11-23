@@ -34,7 +34,7 @@ return new class extends Migration
 
             $table->timestampsTz();
 
-            $table->index(['supplier_order_id', 'created_at']);
+            $table->index(['supplier_order_id', 'created_at'], 'sosh_supplier_created_idx');
         });
     }
 

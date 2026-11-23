@@ -13,6 +13,11 @@
     cart: [],
     currentOrder: null,
     currentAdminOrder: null,
+    currentAdminSupplier: null,
+    supplierDashboard: null,
+    supplierOrders: [],
+    currentSupplierOrder: null,
+    currentSupplierProductId: null,
     returnToCheckout: false,
     language: 'ar',
     token: savedToken || null,
@@ -56,6 +61,8 @@
 
     localStorage.setItem('gozorx_token', data.token);
     localStorage.setItem('gozorx_user', JSON.stringify(data.user));
+    state.supplierDashboard = null;
+    refreshSupplierDashboard();
   }
 
   async function restoreCurrentOrder(navigate = false) {
@@ -77,9 +84,28 @@
     }
   }
 
+  async function refreshSupplierDashboard() {
+    state.supplierDashboard = null;
+
+    if (!state.token || !state.user || state.user.role !== 'supplier') {
+      updateAccountArea();
+      return;
+    }
+
+    try {
+      const result = await apiRequest('/supplier/dashboard');
+      state.supplierDashboard = result;
+    } catch (error) {
+      state.supplierDashboard = null;
+    }
+
+    updateAccountArea();
+  }
+
   function clearSession() {
     state.token = null;
     state.user = null;
+    state.supplierDashboard = null;
 
     localStorage.removeItem('gozorx_token');
     localStorage.removeItem('gozorx_user');
@@ -87,15 +113,46 @@
 
   function updateAccountArea() {
     const area = document.getElementById('accountArea');
+    const nav = document.querySelector('.topbar nav');
+    const cartButton = document.getElementById('cartBtn');
+    const joinButton = document.querySelector('.topbar .actions > [data-page="join"]');
+
+    const isApprovedSupplier = Boolean(
+      state.token && state.user &&
+      state.user.role === 'supplier' &&
+      state.supplierDashboard
+    );
+
+    document.querySelector('.topbar')?.classList.toggle('supplier-header', isApprovedSupplier);
+
+    if (nav) {
+      nav.innerHTML = isApprovedSupplier
+        ? '<a href="#" data-page="market">السوق</a><a href="#" data-page="rfq">عروض الأسعار</a><a href="#" data-page="supplier-dashboard">لوحة الإدارة</a>'
+        : '<a href="#" data-page="market">السوق</a><a href="#" data-page="rfq">طلبات عروض الأسعار</a><a href="#" data-page="nursery">طلبات المشاتل</a>';
+    }
+
+    if (cartButton) cartButton.hidden = isApprovedSupplier;
+    if (joinButton) joinButton.hidden = isApprovedSupplier;
+
     if (!area) return;
 
     if (state.token && state.user) {
       const name = state.user.full_name || state.user.name || 'حسابي';
+
       area.innerHTML =
         '<span class="account-name"></span> ' +
-        (state.user.role === 'admin'
-          ? '<button class="outline" data-page="admin-orders" type="button">إدارة الطلبات</button> <button class="outline" data-page="admin-payments" type="button">مراجعة المدفوعات</button> '
-          : '<button class="outline" data-page="my-orders" type="button">طلباتي</button> ') +
+        (isApprovedSupplier
+          ? ''
+          : (state.user.role === 'admin'
+              ? '<button class="outline" data-page="admin-orders" type="button">إدارة الطلبات</button> <button class="outline" data-page="admin-payments" type="button">مراجعة المدفوعات</button> <button class="outline" data-page="admin-suppliers" type="button">إدارة الموردين</button> <button class="outline" data-page="admin-products" type="button">مراجعة المنتجات</button> '
+              : (state.user.role === 'supplier'
+                  ? (state.supplierDashboard
+                      ? '<button class="outline" data-page="supplier-dashboard" type="button">لوحة المورد</button> '
+                      : '') +
+                    '<button class="outline" data-page="supplier-application" type="button">متابعة طلب المورد</button> '
+                  : state.user.role === 'buyer'
+                    ? '<button class="outline" data-page="my-orders" type="button">طلباتي</button> '
+                    : ''))) +
         '<button class="outline" id="logoutBtn" type="button">تسجيل الخروج</button>';
 
       area.querySelector('.account-name').textContent = name;
@@ -156,7 +213,6 @@
 
             <div class="admin-payment-grid">
               <div><strong>العميل:</strong> ${escapeAdminHtml(buyerName)}</div>
-              <div><strong>الهاتف:</strong> ${escapeAdminHtml(buyer.phone || order.recipient_phone || '—')}</div>
               <div><strong>البريد:</strong> ${escapeAdminHtml(buyer.email || '—')}</div>
               <div><strong>طريقة الدفع:</strong> ${escapeAdminHtml(payment.payment_method || '—')}</div>
               <div><strong>رقم التحويل:</strong> ${escapeAdminHtml(payment.transaction_reference || '—')}</div>
@@ -310,6 +366,7 @@
 
   const adminOrderStatusLabels = {
     pending_payment: 'بانتظار العربون',
+    pending_shipping_cost: 'بانتظار تحديد تكلفة الشحن',
     confirmed: 'تم تأكيد الطلب',
     processing: 'قيد التجهيز',
     shipped: 'تم الشحن',
@@ -359,7 +416,6 @@
             </div>
             <div class="admin-order-grid">
               <div><span>العميل</span><strong>${escapeAdminHtml(buyerName)}</strong></div>
-              <div><span>هاتف العميل</span><strong>${escapeAdminHtml(buyer.phone || order.recipient_phone || '—')}</strong></div>
               <div><span>تاريخ الطلب</span><strong>${escapeAdminHtml(createdAt)}</strong></div>
               <div><span>إجمالي الطلب</span><strong>${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه</strong></div>
               <div><span>العربون المطلوب</span><strong>${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
@@ -396,6 +452,7 @@
           <input id="adminOrdersSearch" type="search" placeholder="ابحث برقم الطلب أو اسم العميل أو الهاتف أو البريد">
           <select id="adminOrdersStatus">
             <option value="">كل الحالات</option>
+            <option value="pending_shipping_cost">بانتظار تحديد تكلفة الشحن</option>
             <option value="pending_payment">بانتظار العربون</option>
             <option value="confirmed">تم تأكيد الطلب</option>
             <option value="processing">قيد التجهيز</option>
@@ -466,6 +523,74 @@
   const buyer = order.buyer || {};
   const payment = order.deposit_transaction || null;
   const statusLabel = adminOrderStatusLabels[order.status] || order.status || 'غير محدد';
+
+  const nextOrderStatus = {
+    confirmed: { status: 'processing', label: 'بدء التجهيز' },
+    processing: { status: 'shipped', label: 'خرج للتوصيل' },
+    shipped: { status: 'delivered', label: 'تأكيد التسليم' }
+  }[order.status] || null;
+
+  const orderStatusAction = nextOrderStatus
+    ? `
+      <section class="panel admin-order-detail">
+        <h3>إدارة حالة الطلب</h3>
+        <p>الحالة الحالية: <strong>${escapeAdminHtml(statusLabel)}</strong></p>
+        <button type="button" class="primary" data-admin-order-status="${nextOrderStatus.status}">
+          ${nextOrderStatus.label}
+        </button>
+      </section>
+    `
+    : '';
+
+  const balanceTransaction = order.balance_transaction || null;
+
+  const balancePaymentMethodLabels = {
+    vodafone_cash: 'فودافون كاش',
+    instapay: 'إنستاباي',
+    cash: 'نقدًا'
+  };
+
+  const balanceSection = balanceTransaction
+    ? `
+      <section class="panel admin-order-detail">
+        <h3>تحصيل المبلغ المتبقي</h3>
+        <p><strong>المبلغ المحصل:</strong> ${Number(balanceTransaction.amount || 0).toLocaleString('ar-EG')} جنيه</p>
+        <p><strong>وسيلة التحصيل:</strong> ${escapeAdminHtml(balancePaymentMethodLabels[balanceTransaction.payment_method] || balanceTransaction.payment_method || '—')}</p>
+        <p><strong>تاريخ التحصيل:</strong> ${escapeAdminHtml(balanceTransaction.collected_at ? new Date(balanceTransaction.collected_at).toLocaleString('ar-EG') : '—')}</p>
+        <p><strong>المسؤول عن التحصيل:</strong> ${escapeAdminHtml(balanceTransaction.collected_by?.name || '—')}</p>
+        <p><strong>حالة العملية:</strong> ${escapeAdminHtml(balanceTransaction.status || '—')}</p>
+      </section>
+    `
+    : order.status === 'delivered'
+      ? `
+        <section class="panel admin-order-detail">
+          <h3>تحصيل المبلغ المتبقي</h3>
+          <p><strong>المبلغ المطلوب تحصيله:</strong> ${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه</p>
+          <form id="adminCollectBalanceForm">
+            <label for="adminBalanceAmount">المبلغ المحصل بالجنيه</label>
+            <input
+              type="number"
+              id="adminBalanceAmount"
+              name="amount"
+              min="0.01"
+              max="999999999"
+              step="0.01"
+              value="${Number(order.balance_amount || 0).toFixed(2)}"
+              required
+            >
+
+            <label for="adminBalancePaymentMethod">وسيلة التحصيل</label>
+            <select id="adminBalancePaymentMethod" name="payment_method" required>
+              <option value="vodafone_cash">فودافون كاش</option>
+              <option value="instapay">إنستاباي</option>
+              <option value="cash">نقدًا</option>
+            </select>
+
+            <button type="submit" class="primary">تسجيل التحصيل وإتمام الطلب</button>
+          </form>
+        </section>
+      `
+      : '';
 
   const individualItem = order.individual_item || order.individualItem || null;
   const individualSupplier = order.supplier || {};
@@ -571,14 +696,75 @@ const legacySupplierSections = supplierOrders.length
 
 const supplierSections = individualSection || legacySupplierSections ||
   '<div class="panel">لا توجد تفاصيل طلبات موردين متاحة في البيانات.</div>';
+const shippingHistories = Array.isArray(order.shipping_histories)
+  ? order.shipping_histories
+  : (Array.isArray(order.shippingHistories) ? order.shippingHistories : []);
 
-    app.innerHTML = shell(
+const shippingHistorySection = shippingHistories.length
+  ? `
+    <section class="panel admin-order-detail">
+      <h3>سجل تحديد تكلفة الشحن</h3>
+      ${shippingHistories.map(history => `
+        <div class="admin-order-grid">
+          <div>
+            <span>تكلفة الشحن</span>
+            <strong>${Number(history.new_shipping_cost || 0).toLocaleString('ar-EG')} جنيه</strong>
+          </div>
+          <div>
+            <span>المسؤول</span>
+            <strong>${escapeAdminHtml(history.admin?.full_name || history.admin?.name || '—')}</strong>
+          </div>
+          <div>
+            <span>تاريخ التسجيل</span>
+            <strong>${escapeAdminHtml(history.created_at ? new Date(history.created_at).toLocaleString('ar-EG') : '—')}</strong>
+          </div>
+          <div>
+            <span>الملاحظات الداخلية</span>
+            <strong>${escapeAdminHtml(history.internal_notes || 'لا توجد ملاحظات')}</strong>
+          </div>
+        </div>
+      `).join('')}
+    </section>
+  `
+  : '';
+    const shippingCostForm = order.status === 'pending_shipping_cost'
+  ? `
+    <section class="panel admin-order-detail">
+      <h3>تحديد تكلفة الشحن</h3>
+      <form id="adminShippingCostForm">
+        <label for="adminShippingCost">تكلفة الشحن بالجنيه</label>
+        <input
+          type="number"
+          id="adminShippingCost"
+          name="shipping_cost"
+          min="0"
+          max="999999999"
+          step="0.01"
+          required
+          placeholder="أدخل تكلفة الشحن"
+        >
+
+        <label for="adminShippingNotes">ملاحظات داخلية (اختياري)</label>
+        <textarea
+          id="adminShippingNotes"
+          name="internal_notes"
+          maxlength="2000"
+          placeholder="ملاحظات للإدارة فقط"
+        ></textarea>
+
+        <button type="submit" class="primary">حفظ تكلفة الشحن</button>
+      </form>
+    </section>
+  `
+  : '';
+  app.innerHTML = shell(
       'تفاصيل الطلب',
       'مراجعة بيانات العميل والطلب والموردين وحالة العربون.',
       `
         <div class="admin-orders-toolbar">
           <button class="outline" type="button" data-admin-orders-action="back">العودة إلى قائمة الطلبات</button>
         </div>
+        ${orderStatusAction}
         <section class="panel admin-order-detail">
           <h3>الطلب رقم: ${escapeAdminHtml(order.order_number || order.id)}</h3>
           <div class="admin-order-grid">
@@ -588,7 +774,6 @@ const supplierSections = individualSection || legacySupplierSections ||
             <div><span>هاتف العميل</span><strong>${escapeAdminHtml(buyer.phone || '—')}</strong></div>
             <div><span>البريد الإلكتروني</span><strong>${escapeAdminHtml(buyer.email || '—')}</strong></div>
             <div><span>اسم المستلم</span><strong>${escapeAdminHtml(order.recipient_name || '—')}</strong></div>
-            <div><span>هاتف المستلم</span><strong>${escapeAdminHtml(order.recipient_phone || '—')}</strong></div>
             <div><span>العنوان</span><strong>${escapeAdminHtml(order.address || '—')}</strong></div>
             <div><span>إجمالي الطلب</span><strong>${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه</strong></div>
             <div><span>العربون 30%</span><strong>${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
@@ -605,8 +790,83 @@ const supplierSections = individualSection || legacySupplierSections ||
         </section>
         <h2>تفاصيل الموردين والأصناف</h2>
         ${supplierSections}
-      `
+      ${shippingCostForm}
+        ${balanceSection}
+        ${shippingHistorySection}
+        `
     );
+      const shippingForm = document.getElementById('adminShippingCostForm');
+
+    if (shippingForm) {
+      shippingForm.addEventListener('submit', async e => {
+        e.preventDefault();
+
+        const submitButton = shippingForm.querySelector('button[type="submit"]');
+        const formData = new FormData(shippingForm);
+
+        const payload = {
+          shipping_cost: Number(formData.get('shipping_cost')),
+          internal_notes: String(formData.get('internal_notes') || '').trim()
+        };
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'جارٍ حفظ تكلفة الشحن...';
+
+        try {
+          await apiRequest(
+            '/admin/orders/' + encodeURIComponent(order.id) + '/shipping-cost',
+            {
+              method: 'PATCH',
+              body: JSON.stringify(payload)
+            }
+          );
+
+          notify('تم حفظ تكلفة الشحن بنجاح');
+
+          await openAdminOrder(order.id);
+        } catch (error) {
+          notify(error.message);
+          submitButton.disabled = false;
+          submitButton.textContent = 'حفظ تكلفة الشحن';
+        }
+      });
+    }
+
+    const collectBalanceForm = document.getElementById('adminCollectBalanceForm');
+
+    if (collectBalanceForm) {
+      collectBalanceForm.addEventListener('submit', async e => {
+        e.preventDefault();
+
+        const submitButton = collectBalanceForm.querySelector('button[type="submit"]');
+        const formData = new FormData(collectBalanceForm);
+
+        const payload = {
+          amount: Number(formData.get('amount')),
+          payment_method: String(formData.get('payment_method') || '')
+        };
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'جارٍ تسجيل التحصيل...';
+
+        try {
+          await apiRequest(
+            '/admin/orders/' + encodeURIComponent(order.id) + '/collect-balance',
+            {
+              method: 'POST',
+              body: JSON.stringify(payload)
+            }
+          );
+
+          notify('تم تسجيل التحصيل وإتمام الطلب بنجاح');
+          await openAdminOrder(order.id);
+        } catch (error) {
+          notify(error.message);
+          submitButton.disabled = false;
+          submitButton.textContent = 'تسجيل التحصيل وإتمام الطلب';
+        }
+      });
+    }
   }
 
   async function loadMyOrders() {
@@ -631,6 +891,7 @@ const supplierSections = individualSection || legacySupplierSections ||
 
       const labels = {
         pending_payment: 'بانتظار العربون',
+        pending_shipping_cost: 'بانتظار تحديد تكلفة الشحن',
         confirmed: 'تم تأكيد الطلب',
         processing: 'قيد التجهيز',
         shipped: 'تم الشحن',
@@ -641,24 +902,43 @@ const supplierSections = individualSection || legacySupplierSections ||
 
       container.innerHTML = orders.map(order => {
         const payment = order.deposit_transaction || null;
-        let receiptStatus = 'لم يتم رفع الإيصال';
+        let receiptStatus = 'بانتظار العربون';
 
-        if (order.receipt_uploaded) {
-          receiptStatus = payment?.status === 'rejected'
-            ? 'الإيصال مرفوض - راجع سبب الرفض'
-            : payment?.status === 'approved'
-              ? 'تم اعتماد العربون'
-              : 'الإيصال بانتظار مراجعة الإدارة';
-        }
+if (payment?.status === 'rejected') {
+  receiptStatus = 'تم رفض الإيصال';
+} else if (payment?.status === 'approved') {
+  receiptStatus = 'تم اعتماد العربون';
+} else if (order.receipt_uploaded) {
+  receiptStatus = 'يتم تأكيد سلامة الإيصال';
+}
 
         const createdAt = order.created_at
           ? new Date(order.created_at).toLocaleString('ar-EG')
           : '—';
+        const orderStatus = payment?.status === 'rejected'
+  ? 'تم رفض الإيصال'
+  : payment?.status === 'approved'
+    ? 'تم اعتماد العربون'
+    : order.receipt_uploaded
+      ? 'يتم تأكيد سلامة الإيصال'
+      : labels[order.status] || order.status || 'غير محدد';
+        const shippingPending = order.status === 'pending_shipping_cost';
 
-        const orderStatus = labels[order.status] || order.status || 'غير محدد';
+        const totalDisplay = shippingPending
+          ? 'بانتظار تحديد الشحن'
+          : `${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه`;
+
+        const depositDisplay = shippingPending
+          ? 'يُحدد بعد الشحن'
+          : `${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه`;
+
+        const balanceDisplay = shippingPending
+          ? 'يُحدد بعد الشحن'
+          : `${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه`;
+
         const statusClass = ['confirmed', 'delivered', 'completed'].includes(order.status)
           ? 'ok' : '';
-
+  
         return `
           <article class="panel my-order-card">
             <div class="my-order-heading">
@@ -671,9 +951,9 @@ const supplierSections = individualSection || legacySupplierSections ||
 
             <div class="my-order-grid">
               <div><span>تاريخ الطلب</span><strong>${escapeAdminHtml(createdAt)}</strong></div>
-              <div><span>إجمالي الطلب</span><strong>${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه</strong></div>
-              <div><span>العربون (30%)</span><strong>${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
-              <div><span>المتبقي عند الاستلام</span><strong>${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه</strong></div>
+              <div><span>إجمالي الطلب</span><strong>${escapeAdminHtml(totalDisplay)}</strong></div>
+              <div><span>العربون (30%)</span><strong>${escapeAdminHtml(depositDisplay)}</strong></div>
+              <div><span>المتبقي عند الاستلام</span><strong>${escapeAdminHtml(balanceDisplay)}</strong></div>
             </div>
 
             <p class="my-order-receipt">
@@ -695,7 +975,7 @@ const supplierSections = individualSection || legacySupplierSections ||
   }
 
   function renderMyOrders() {
-    if (!state.token || !state.user || state.user.role === 'admin') {
+    if (!state.token || !state.user || state.user.role !== 'buyer') {
       app.innerHTML = shell(
         'طلباتي',
         'سجّل الدخول بحساب مشتري لعرض طلباتك.',
@@ -714,8 +994,8 @@ const supplierSections = individualSection || legacySupplierSections ||
   }
 
   async function openMyOrder(orderId, button) {
-    if (!state.token || !state.user || state.user.role === 'admin') {
-      notify('سجّل الدخول بحساب المشتري لعرض الطلب.');
+    if (!state.token || !state.user || state.user.role !== 'buyer') {
+      notify('هذه الصفحة متاحة لحسابات المشترين فقط.');
       return;
     }
 
@@ -737,9 +1017,1477 @@ const supplierSections = individualSection || legacySupplierSections ||
     }
   }
 
+
+  const supplierDocNames = {
+    commercial_register: 'السجل التجاري',
+    tax_card: 'البطاقة الضريبية',
+    personal_photo: 'الصورة الشخصية',
+    national_id: 'بطاقة الرقم القومي'
+  };
+
+  const supplierStatusNames = {
+    pending_approval: 'بانتظار المراجعة',
+    approved: 'مورد معتمد',
+    rejected: 'مرفوض',
+    suspended: 'موقوف'
+  };
+
+
+  const productImageUrl = path =>
+    API_BASE.replace(/\/api\/v1\/?$/, '') + '/storage/' +
+    String(path || '').split('/').map(encodeURIComponent).join('/');
+
+  async function loadAdminProducts() {
+    const box = document.getElementById('adminProductsList');
+    if (!box) return;
+
+    box.innerHTML = '<div class="empty">جارٍ تحميل المنتجات...</div>';
+
+    try {
+      const result = await apiRequest('/admin/products');
+      const products = Array.isArray(result.data) ? result.data : [];
+
+      if (!products.length) {
+        box.innerHTML = '<div class="panel empty">لا توجد منتجات تنتظر المراجعة حاليًا.</div>';
+        return;
+      }
+
+      box.innerHTML = products.map(product => {
+        const supplier = product.supplier || {};
+        const user = supplier.user || {};
+
+        const adminProductImages = Array.isArray(product.images)
+          ? product.images
+          : [];
+
+        const adminImagesMarkup = adminProductImages.length
+          ? `<div class="admin-product-images">
+              ${adminProductImages.map((image, index) => `
+                <div class="admin-product-image-item">
+                  <img
+                    src="${escapeAdminHtml(productImageUrl(image.image_path))}"
+                    alt="صورة المنتج ${index + 1}"
+                    loading="lazy"
+                  >
+                  ${image.is_primary || index === 0
+                    ? '<span class="admin-primary-image-label">الصورة الأساسية</span>'
+                    : `<span class="admin-image-number">الصورة ${index + 1}</span>`}
+                </div>
+              `).join('')}
+            </div>`
+          : product.image_path
+            ? `<div class="admin-product-images">
+                <div class="admin-product-image-item">
+                  <img src="${escapeAdminHtml(productImageUrl(product.image_path))}" alt="صورة المنتج" loading="lazy">
+                  <span class="admin-primary-image-label">الصورة الأساسية</span>
+                </div>
+              </div>`
+            : '<p class="hint">لم يرفق المورد صورًا لهذا المنتج.</p>';
+
+        return `
+          <article class="panel admin-order-card">
+            <div class="admin-order-heading">
+              <h3>${escapeAdminHtml(product.name_ar || product.name_en || 'منتج')}</h3>
+              <span class="status">بانتظار المراجعة</span>
+            </div>
+            ${adminImagesMarkup}
+            <div class="admin-order-grid">
+              <div><span>رقم المنتج</span><strong>${escapeAdminHtml(product.id)}</strong></div>
+              <div><span>اسم المنتج بالإنجليزية</span><strong>${escapeAdminHtml(product.name_en || '—')}</strong></div>
+              <div><span>السعر</span><strong>${escapeAdminHtml(product.unit_price)} جنيه</strong></div>
+              <div><span>الوحدة</span><strong>${escapeAdminHtml(product.unit_name || '—')}</strong></div>
+              <div><span>الحد الأدنى للطلب</span><strong>${escapeAdminHtml(product.minimum_order_quantity)}</strong></div>
+              <div><span>الكمية المتاحة</span><strong>${escapeAdminHtml(product.available_quantity)}</strong></div>
+              <div><span>المورد</span><strong>${escapeAdminHtml(supplier.business_name || '—')}</strong></div>
+              <div><span>اسم صاحب الحساب</span><strong>${escapeAdminHtml(user.full_name || '—')}</strong></div>
+              <div><span>هاتف المورد</span><strong>${escapeAdminHtml(user.phone || '—')}</strong></div>
+            </div>
+            ${product.description ? `<p>${escapeAdminHtml(product.description)}</p>` : ''}
+            <div class="admin-product-actions">
+              <button class="primary" type="button" data-admin-product-action="approve" data-product-id="${escapeAdminHtml(product.id)}">اعتماد ونشر المنتج</button>
+              <button class="outline danger" type="button" data-admin-product-action="reject" data-product-id="${escapeAdminHtml(product.id)}">رفض المنتج</button>
+            </div>
+          </article>`;
+      }).join('');
+    } catch (error) {
+      box.innerHTML = '<div class="panel empty">تعذر تحميل المنتجات: ' +
+        escapeAdminHtml(error.message) +
+        '<br><button class="outline" data-admin-products-action="refresh">إعادة المحاولة</button></div>';
+    }
+  }
+
+  function renderAdminProducts() {
+    if (!state.token || !state.user || state.user.role !== 'admin') {
+      app.innerHTML = shell('غير مصرح بالدخول', 'هذه الصفحة للإدارة فقط.',
+        '<div class="panel"><button class="primary" data-page="login">تسجيل الدخول</button></div>');
+      return;
+    }
+
+    app.innerHTML = shell('مراجعة المنتجات', 'راجع بيانات المنتج والمورد قبل اعتماد المنتج ونشره في السوق.', `
+      <div class="admin-orders-toolbar panel">
+        <p>تظهر هنا المنتجات الجديدة التي أضافها الموردون وتنتظر مراجعة الإدارة.</p>
+        <button class="outline" type="button" data-admin-products-action="refresh">تحديث القائمة</button>
+      </div>
+      <div id="adminProductsList"><div class="empty">جارٍ التحميل...</div></div>
+    `);
+    loadAdminProducts();
+  }
+
+  async function handleAdminProductDecision(action, id, button) {
+    if (!['approve', 'reject'].includes(action)) return;
+
+    let reviewNote = null;
+
+    if (action === 'reject') {
+      reviewNote = window.prompt('اكتب سبب رفض المنتج ليظهر ضمن سجل المراجعة:');
+      if (reviewNote === null) return;
+      reviewNote = reviewNote.trim();
+    } else if (!window.confirm('هل تريد اعتماد هذا المنتج ونشره في السوق؟')) {
+      return;
+    }
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'جارٍ تنفيذ القرار...';
+    }
+
+    try {
+      await apiRequest('/admin/products/' + encodeURIComponent(id) + '/decision', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          decision: action === 'approve' ? 'approved' : 'rejected',
+          review_note: reviewNote
+        })
+      });
+
+      notify(action === 'approve' ? 'تم اعتماد المنتج بنجاح ونشره في السوق' : 'تم رفض المنتج وتسجيل سبب الرفض');
+      await loadAdminProducts();
+    } catch (error) {
+      notify(error.message);
+      if (button) {
+        button.disabled = false;
+        button.textContent = action === 'approve' ? 'اعتماد ونشر المنتج' : 'رفض المنتج';
+      }
+    }
+  }
+
+  async function loadAdminSuppliers() {
+    const box = document.getElementById('adminSuppliersList');
+    if (!box) return;
+
+    const status = document.getElementById('adminSuppliersStatus')?.value || 'pending_approval';
+    box.innerHTML = '<div class="empty">جارٍ تحميل الموردين...</div>';
+
+    try {
+      const result = await apiRequest('/admin/suppliers?status=' + encodeURIComponent(status));
+      const suppliers = Array.isArray(result.data) ? result.data : [];
+
+      if (!suppliers.length) {
+        box.innerHTML = '<div class="panel empty">لا توجد طلبات بهذه الحالة.</div>';
+        return;
+      }
+
+      box.innerHTML = suppliers.map(s => {
+        const u = s.user || {};
+        return `
+          <article class="panel admin-order-card">
+            <div class="admin-order-heading">
+              <h3>${escapeAdminHtml(s.business_name || 'مورد')} - ${escapeAdminHtml(s.id)}</h3>
+              <span class="status">${escapeAdminHtml(supplierStatusNames[s.status] || s.status)}</span>
+            </div>
+            <div class="admin-order-grid">
+              <div><span>مقدم الطلب</span><strong>${escapeAdminHtml(u.full_name || '—')}</strong></div>
+              <div><span>الهاتف</span><strong>${escapeAdminHtml(u.phone || '—')}</strong></div>
+              <div><span>البريد</span><strong>${escapeAdminHtml(u.email || '—')}</strong></div>
+              <div><span>تاريخ التقديم</span><strong>${escapeAdminHtml(s.submitted_at ? new Date(s.submitted_at).toLocaleString('ar-EG') : '—')}</strong></div>
+            </div>
+            <button class="outline" data-admin-supplier-id="${escapeAdminHtml(s.id)}">مراجعة الطلب والمستندات</button>
+          </article>`;
+      }).join('');
+    } catch (error) {
+      box.innerHTML = '<div class="panel empty">تعذر تحميل الموردين: ' +
+        escapeAdminHtml(error.message) +
+        '<br><button class="outline" data-admin-suppliers-action="refresh">إعادة المحاولة</button></div>';
+    }
+  }
+
+  function renderAdminSuppliers() {
+    if (!state.token || !state.user || state.user.role !== 'admin') {
+      app.innerHTML = shell('غير مصرح بالدخول', 'هذه الصفحة للإدارة فقط.',
+        '<div class="panel"><button class="primary" data-page="login">تسجيل الدخول</button></div>');
+      return;
+    }
+
+    app.innerHTML = shell('إدارة الموردين', 'مراجعة طلبات الانضمام ومستندات التحقق.', `
+      <div class="admin-orders-toolbar panel">
+        <div class="admin-orders-filters">
+          <select id="adminSuppliersStatus">
+            <option value="pending_approval">طلبات تنتظر المراجعة</option>
+            <option value="approved">الموردون المعتمدون</option>
+            <option value="rejected">الطلبات المرفوضة</option>
+            <option value="suspended">الموردون الموقوفون</option>
+          </select>
+          <button class="primary" data-admin-suppliers-action="search">عرض</button>
+          <button class="outline" data-admin-suppliers-action="refresh">تحديث</button>
+        </div>
+      </div>
+      <div id="adminSuppliersList"><div class="empty">جارٍ التحميل...</div></div>
+    `);
+    loadAdminSuppliers();
+  }
+
+  async function openAdminSupplier(id) {
+    app.innerHTML = shell('تفاصيل المورد', 'جارٍ تحميل البيانات...', '<div class="panel empty">يرجى الانتظار...</div>');
+    try {
+      const result = await apiRequest('/admin/suppliers/' + encodeURIComponent(id));
+      state.currentAdminSupplier = result.supplier;
+      go('admin-supplier-details');
+    } catch (error) {
+      notify(error.message);
+      go('admin-suppliers');
+    }
+  }
+
+  function renderAdminSupplierDetails() {
+    const s = state.currentAdminSupplier;
+    if (!s) {
+      app.innerHTML = shell('تفاصيل المورد', '', '<button class="outline" data-page="admin-suppliers">العودة</button>');
+      return;
+    }
+
+    const u = s.user || {};
+    const mapUrl = s.latitude && s.longitude
+      ? 'https://www.google.com/maps?q=' + encodeURIComponent(s.latitude + ',' + s.longitude)
+      : '';
+    const docs = (s.documents || []).map(d => {
+      const pending = d.status === 'pending_review';
+      return `
+        <article class="panel">
+          <div class="admin-order-heading">
+            <h3>${escapeAdminHtml(supplierDocNames[d.document_type] || d.document_type)}</h3>
+            <span class="status">${escapeAdminHtml(d.status === 'approved' ? 'مقبول' : d.status === 'rejected' ? 'مرفوض - مطلوب إعادة الرفع' : 'بانتظار المراجعة')}</span>
+          </div>
+          <p>الملف: ${escapeAdminHtml(d.original_filename || '—')}</p>
+          ${d.review_note ? `<p>ملاحظة الإدارة: ${escapeAdminHtml(d.review_note)}</p>` : ''}
+          <button class="outline" data-admin-supplier-doc-action="view" data-document-id="${d.id}">عرض المستند</button>
+          ${pending ? `
+            <button class="primary" data-admin-supplier-doc-action="approve" data-document-id="${d.id}">قبول المستند</button>
+            <button class="outline" data-admin-supplier-doc-action="reject" data-document-id="${d.id}">رفض وطلب إعادة الرفع</button>
+          ` : ''}
+        </article>`;
+    }).join('');
+
+    app.innerHTML = shell('مراجعة طلب المورد', 'اعتماد المورد يتم تلقائيًا بعد قبول المستندات الأربعة.', `
+      <div class="panel">
+        <h2>${escapeAdminHtml(s.business_name || '—')}</h2>
+        <p>حالة الطلب: ${escapeAdminHtml(supplierStatusNames[s.status] || s.status)}</p>
+        <div class="admin-order-grid">
+          <div><span>مقدم الطلب</span><strong>${escapeAdminHtml(u.full_name || '—')}</strong></div>
+          <div><span>نوع النشاط</span><strong>${escapeAdminHtml(s.business_type || '—')}</strong></div>
+          <div><span>الهاتف</span><strong>${escapeAdminHtml(u.phone || '—')}</strong></div>
+          <div><span>البريد</span><strong>${escapeAdminHtml(u.email || '—')}</strong></div>
+          <div><span>العنوان</span><strong>${escapeAdminHtml(s.address || '—')}</strong></div>
+        </div>
+        ${s.description ? `<p>وصف النشاط: ${escapeAdminHtml(s.description)}</p>` : ''}
+        ${mapUrl ? `<p><a href="${mapUrl}" target="_blank" rel="noopener noreferrer">فتح موقع المورد على الخريطة</a></p>` : ''}
+      </div>
+      <h2>مستندات التحقق</h2>
+      ${docs || '<div class="panel empty">لا توجد مستندات.</div>'}
+      <div class="panel"><button class="outline" data-admin-suppliers-action="back">العودة إلى قائمة الموردين</button></div>
+    `);
+  }
+
+  async function handleAdminSupplierDocumentAction(action, id, button) {
+    const s = state.currentAdminSupplier;
+    const doc = (s?.documents || []).find(d => String(d.id) === String(id));
+    if (!doc) return;
+
+    if (action === 'view') {
+      const tab = window.open('about:blank', '_blank');
+      if (!tab) {
+        notify('اسمح بالنوافذ المنبثقة لعرض المستند.');
+        return;
+      }
+      try {
+        const response = await fetch(API_BASE + '/admin/supplier-documents/' + encodeURIComponent(id) + '/file', {
+          headers: { 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/pdf,image/jpeg,image/png' }
+        });
+        if (!response.ok) throw new Error('تعذر فتح المستند.');
+        const url = URL.createObjectURL(await response.blob());
+        tab.location.href = url;
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (error) {
+        tab.close();
+        notify(error.message);
+      }
+      return;
+    }
+
+    if (doc.status !== 'pending_review') {
+      notify('تمت مراجعة هذا المستند بالفعل.');
+      return;
+    }
+
+    let note = '';
+    if (action === 'reject') {
+      note = window.prompt('اكتب سبب رفض المستند وما المطلوب تعديله:') || '';
+      if (!note.trim()) {
+        notify('سبب الرفض مطلوب.');
+        return;
+      }
+    } else if (action !== 'approve') {
+      return;
+    }
+
+    if (button) button.disabled = true;
+    try {
+      await apiRequest('/admin/supplier-documents/' + encodeURIComponent(id) + '/decision', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          decision: action === 'approve' ? 'approved' : 'rejected',
+          review_note: note
+        })
+      });
+      notify(action === 'approve' ? 'تم قبول المستند.' : 'تم رفض المستند وحفظ سبب الرفض.');
+      await openAdminSupplier(s.id);
+    } catch (error) {
+      notify(error.message);
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function renderSupplierApplication() {
+    if (!state.token || !state.user || state.user.role !== 'supplier') {
+      app.innerHTML = shell(
+        'متابعة طلب المورد',
+        'هذه الصفحة مخصصة للحسابات المسجلة بدور المورد فقط.',
+        '<div class="panel"><p>للوصول إلى متابعة طلب المورد، يرجى تسجيل الدخول بحساب المورد المستقل.</p><button class="outline" data-page="home">العودة إلى السوق</button></div>'
+      );
+      return;
+    }
+
+    app.innerHTML = shell(
+      'متابعة طلب المورد',
+      'جارٍ تحميل حالة الطلب والمستندات...',
+      '<div class="panel empty">يرجى الانتظار...</div>'
+    );
+
+    try {
+      const result = await apiRequest('/supplier/application');
+      const supplier = result.supplier || {};
+
+      const documentStatusNames = {
+        pending_review: 'قيد المراجعة',
+        approved: 'معتمد',
+        rejected: 'مرفوض — مطلوب إعادة الرفع'
+      };
+
+      const formatDate = value => {
+        if (!value) return '—';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('ar-EG');
+      };
+
+      const documents = (supplier.documents || []).map(doc => {
+        const rejected = doc.status === 'rejected';
+        const imageOnly = ['personal_photo', 'national_id'].includes(doc.type);
+        const accept = imageOnly
+          ? 'image/jpeg,image/png'
+          : '.pdf,image/jpeg,image/png';
+
+        return `
+          <article class="panel">
+            <div class="admin-order-heading">
+              <h3>${escapeAdminHtml(supplierDocNames[doc.type] || doc.type)}</h3>
+              <span class="status">${escapeAdminHtml(documentStatusNames[doc.status] || doc.status)}</span>
+            </div>
+            <p class="hint">آخر إرسال: ${escapeAdminHtml(formatDate(doc.submitted_at))}</p>
+            ${doc.reviewed_at ? `<p class="hint">تاريخ المراجعة: ${escapeAdminHtml(formatDate(doc.reviewed_at))}</p>` : ''}
+            ${doc.review_note ? `<p class="payment-notice"><strong>ملاحظة الإدارة:</strong> ${escapeAdminHtml(doc.review_note)}</p>` : ''}
+            ${rejected ? `
+              <form class="form-grid" data-supplier-reupload="${escapeAdminHtml(doc.type)}">
+                <div class="field full">
+                  <label>اختر نسخة جديدة من المستند</label>
+                  <input type="file" name="document" accept="${accept}" required>
+                  <p class="hint">${imageOnly ? 'الصيغ المقبولة: JPG أو PNG' : 'الصيغ المقبولة: PDF أو JPG أو PNG'}</p>
+                </div>
+                <div class="field full">
+                  <button class="primary" type="submit">إعادة رفع المستند</button>
+                </div>
+              </form>
+            ` : ''}
+          </article>
+        `;
+      }).join('');
+
+      app.innerHTML = shell(
+        'متابعة طلب المورد',
+        'يمكنك متابعة مراجعة المستندات ومعرفة المطلوب لاستكمال اعتمادك.',
+        `
+          <div class="panel">
+            <h2>${escapeAdminHtml(supplier.business_name || 'طلب المورد')}</h2>
+            <p>حالة الطلب: <strong>${escapeAdminHtml(supplierStatusNames[supplier.status] || supplier.status || '—')}</strong></p>
+            ${supplier.status === 'approved' ? `
+              <div class="payment-notice">
+                <strong>تم اعتماد حسابك كمورد!</strong>
+                <p>يمكنك الآن إضافة منتجاتك إلى المنصة، وستُراجع الإدارة كل منتج قبل نشره.</p>
+                <button class="primary" data-page="supplier-add-product" type="button">إضافة منتج جديد</button>
+              </div>
+            ` : ''}
+            <p>تاريخ تقديم الطلب: ${escapeAdminHtml(formatDate(supplier.submitted_at))}</p>
+            <p>العنوان: ${escapeAdminHtml(supplier.address || '—')}</p>
+          </div>
+          <h2>مستندات التحقق</h2>
+          ${documents || '<div class="panel empty">لا توجد مستندات مسجلة لهذا الطلب.</div>'}
+          <div class="panel">
+            <button class="outline" data-supplier-application-action="refresh">تحديث الحالة</button>
+            <button class="outline" data-page="home">العودة للرئيسية</button>
+          </div>
+        `
+      );
+
+      app.querySelectorAll('form[data-supplier-reupload]').forEach(form => {
+        form.addEventListener('submit', async e => {
+          e.preventDefault();
+
+          const button = form.querySelector('button[type="submit"]');
+          const type = form.dataset.supplierReupload;
+
+          if (!form.elements.namedItem('document')?.files?.length) {
+            notify('اختر الملف الجديد أولًا.');
+            return;
+          }
+
+          button.disabled = true;
+          button.textContent = 'جارٍ رفع المستند...';
+
+          try {
+            const formData = new FormData(form);
+            const response = await apiRequest(
+              '/supplier/documents/' + encodeURIComponent(type) + '/reupload',
+              { method: 'POST', body: formData }
+            );
+
+            notify(response.message || 'تم رفع المستند بنجاح وإرساله للمراجعة.');
+            await renderSupplierApplication();
+          } catch (error) {
+            notify(error.message || 'تعذر إعادة رفع المستند.');
+            button.disabled = false;
+            button.textContent = 'إعادة رفع المستند';
+          }
+        });
+      });
+    } catch (error) {
+      const noApplication = error.message === 'لا يوجد طلب مورد مرتبط بهذا الحساب.';
+
+      app.innerHTML = shell(
+        'متابعة طلب المورد',
+        noApplication
+          ? 'لا يوجد طلب مورد مرتبط بهذا الحساب حتى الآن.'
+          : 'تعذر تحميل بيانات طلب المورد.',
+        `
+          <div class="panel">
+            <p>${escapeAdminHtml(error.message)}</p>
+            ${noApplication
+              ? '<button class="primary" data-page="join">تقديم طلب انضمام كمورد</button>'
+              : '<button class="primary" data-supplier-application-action="refresh">إعادة المحاولة</button>'}
+          </div>
+        `
+      );
+    }
+  }
+
+
+  async function renderSupplierAddProduct() {
+    if (!state.token || !state.user) {
+      app.innerHTML = shell(
+        'إضافة منتج جديد',
+        'سجّل الدخول أولًا.',
+        '<div class="panel"><button class="primary" data-page="login">تسجيل الدخول</button></div>'
+      );
+      return;
+    }
+
+    app.innerHTML = shell(
+      'إضافة منتج جديد',
+      'جارٍ التحقق من اعتماد حساب المورد...',
+      '<div class="panel empty">يرجى الانتظار...</div>'
+    );
+
+    try {
+      const application = await apiRequest('/supplier/application');
+      const supplier = application.supplier || {};
+
+      if (supplier.status !== 'approved') {
+        app.innerHTML = shell(
+          'إضافة منتج جديد',
+          'إضافة المنتجات متاحة للموردين المعتمدين فقط.',
+          `<div class="panel">
+            <p>حالة حسابك: <strong>${escapeAdminHtml(supplierStatusNames[supplier.status] || supplier.status || 'غير معروفة')}</strong></p>
+            <button class="outline" data-page="supplier-application">متابعة طلب المورد</button>
+          </div>`
+        );
+        return;
+      }
+
+      const categoryResponse = await apiRequest('/categories');
+      const flatten = (items, level = 0) => {
+        let result = [];
+        (items || []).forEach(category => {
+          result.push({ ...category, level });
+          if (Array.isArray(category.children) && category.children.length) {
+            result = result.concat(flatten(category.children, level + 1));
+          }
+        });
+        return result;
+      };
+
+      const categoriesList = flatten(categoryResponse.data || []);
+      const categoryOptions = categoriesList.map(category =>
+        `<option value="${escapeAdminHtml(category.id)}">${'— '.repeat(category.level)}${escapeAdminHtml(category.name_ar || category.name_en || 'قسم')}</option>`
+      ).join('');
+
+      app.innerHTML = shell(
+        'إضافة منتج جديد',
+        'أدخل بيانات المنتج بدقة. سيُرسل المنتج إلى الإدارة للمراجعة قبل ظهوره في السوق.',
+        `
+          <form class="panel form-grid" id="supplierProductForm">
+            <div class="field">
+              <label>اسم المنتج بالعربية *</label>
+              <input name="name_ar" type="text" maxlength="220" required>
+            </div>
+            <div class="field">
+              <label>اسم المنتج بالإنجليزية</label>
+              <input name="name_en" type="text" maxlength="220">
+            </div>
+            <div class="field full">
+              <label>القسم</label>
+              <select name="category_id">
+                <option value="">اختر القسم (اختياري)</option>
+                ${categoryOptions}
+              </select>
+            </div>
+            <div class="field full">
+              <label>وصف المنتج</label>
+              <textarea name="description" rows="4"></textarea>
+            </div>
+            <div class="field full">
+              <label>صور المنتج (حتى 5 صور)</label>
+              <input name="images[]" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+              <div class="supplier-images-preview" id="supplierProductImagesPreview">
+                <span>لم يتم اختيار صور بعد</span>
+              </div>
+              <p class="hint">يمكنك اختيار حتى 5 صور. الصيغ JPG وPNG وWebP، بحد أقصى 5 ميجابايت للصورة.</p>
+            </div>
+            <div class="field">
+              <label>وحدة البيع *</label>
+              <input name="unit_name" type="text" maxlength="50" placeholder="مثال: شتلة، أصيص، قطعة" required>
+            </div>
+            <div class="field">
+              <label>سعر الوحدة بالجنيه *</label>
+              <input name="unit_price" type="number" min="0" step="0.01" required>
+            </div>
+            <div class="field">
+              <label>الحد الأدنى للطلب *</label>
+              <input name="minimum_order_quantity" type="number" min="1" step="1" required>
+            </div>
+            <div class="field">
+              <label>الكمية المتاحة *</label>
+              <input name="available_quantity" type="number" min="0" step="1" required>
+            </div>
+            <div class="field full">
+              <p class="hint">بعد الحفظ سيصبح المنتج مسودة، ولن يظهر للعملاء إلا بعد مراجعة الإدارة واعتماده.</p>
+              <button class="primary" type="submit">حفظ المنتج وإرساله للمراجعة</button>
+              <button class="outline" type="button" data-page="supplier-application">العودة لطلب المورد</button>
+            </div>
+          </form>
+        `
+      );
+
+      const form = document.getElementById('supplierProductForm');
+
+      const imagesInput = form.querySelector('input[name="images[]"]');
+      const imagesPreview = document.getElementById('supplierProductImagesPreview');
+
+      imagesInput.addEventListener('change', () => {
+        const files = Array.from(imagesInput.files || []);
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+        if (files.length > 5) {
+          notify('يمكنك اختيار 5 صور كحد أقصى.');
+          imagesInput.value = '';
+          imagesPreview.innerHTML = '<span>لم يتم اختيار صور بعد</span>';
+          return;
+        }
+
+        if (files.some(file => !validTypes.includes(file.type) || file.size > 5 * 1024 * 1024)) {
+          notify('تأكد أن كل الصور JPG أو PNG أو WebP وبحجم لا يتجاوز 5 ميجابايت.');
+          imagesInput.value = '';
+          imagesPreview.innerHTML = '<span>لم يتم اختيار صور بعد</span>';
+          return;
+        }
+
+        imagesPreview.replaceChildren();
+
+        files.forEach(file => {
+          const img = document.createElement('img');
+          img.src = URL.createObjectURL(file);
+          img.alt = 'معاينة صورة المنتج';
+          imagesPreview.appendChild(img);
+        });
+
+        if (!files.length) {
+          imagesPreview.innerHTML = '<span>لم يتم اختيار صور بعد</span>';
+        }
+      });
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+
+        const button = form.querySelector('button[type="submit"]');
+        const values = Object.fromEntries(new FormData(form).entries());
+
+        const payload = {
+          name_ar: values.name_ar.trim(),
+          name_en: values.name_en.trim() || null,
+          category_id: values.category_id ? Number(values.category_id) : null,
+          description: values.description.trim() || null,
+          unit_name: values.unit_name.trim(),
+          unit_price: Number(values.unit_price),
+          minimum_order_quantity: Number(values.minimum_order_quantity),
+          available_quantity: Number(values.available_quantity)
+        };
+
+        if (
+          !payload.name_ar ||
+          !payload.unit_name ||
+          !Number.isFinite(payload.unit_price) || payload.unit_price < 0 ||
+          !Number.isInteger(payload.minimum_order_quantity) || payload.minimum_order_quantity < 1 ||
+          !Number.isInteger(payload.available_quantity) || payload.available_quantity < 0
+        ) {
+          notify('راجع البيانات المدخلة وتأكد من صحة السعر والكميات.');
+          return;
+        }
+
+        button.disabled = true;
+        button.textContent = 'جارٍ حفظ المنتج...';
+
+        try {
+          const response = await apiRequest('/supplier/products', {
+            method: 'POST',
+            body: (() => {
+              const formData = new FormData(form);
+
+              Object.entries(payload).forEach(([key, value]) => {
+                formData.set(key, value === null ? '' : String(value));
+              });
+
+              return formData;
+            })()
+          });
+
+          const product = response.product || {};
+          app.innerHTML = shell(
+            'تم إرسال المنتج بنجاح',
+            'تم حفظ المنتج كمسودة وهو الآن بانتظار مراجعة الإدارة.',
+            `<div class="panel">
+              <h2>${escapeAdminHtml(product.name_ar || payload.name_ar)}</h2>
+              <p>حالة المنتج: <strong>مسودة — بانتظار مراجعة الإدارة</strong></p>
+              <button class="primary" data-page="supplier-add-product">إضافة منتج آخر</button>
+              <button class="outline" data-page="supplier-application">متابعة حساب المورد</button>
+              <button class="outline" data-page="market">تصفح السوق</button>
+            </div>`
+          );
+          notify(response.message || 'تم حفظ المنتج وإرساله للمراجعة.');
+        } catch (error) {
+          notify(error.message || 'تعذر حفظ المنتج.');
+          button.disabled = false;
+          button.textContent = 'حفظ المنتج وإرساله للمراجعة';
+        }
+      });
+    } catch (error) {
+      app.innerHTML = shell(
+        'إضافة منتج جديد',
+        'تعذر تحميل بيانات الإضافة.',
+        `<div class="panel">
+          <p>${escapeAdminHtml(error.message)}</p>
+          <button class="outline" data-page="supplier-application">العودة لطلب المورد</button>
+          <button class="primary" data-page="supplier-add-product">إعادة المحاولة</button>
+        </div>`
+      );
+    }
+  }
+
+
+
+  async function renderSupplierProductEdit() {
+    const productId = state.currentSupplierProductId;
+
+    if (!state.token || !state.user || !productId) {
+      app.innerHTML = shell(
+        'تعديل المنتج',
+        'تعذر تحديد المنتج المطلوب.',
+        '<div class="panel"><button class="outline" data-page="supplier-products">العودة لمنتجاتي</button></div>'
+      );
+      return;
+    }
+
+    app.innerHTML = shell(
+      'تعديل المنتج',
+      'جارٍ تحميل بيانات المنتج...',
+      '<div class="panel empty">يرجى الانتظار...</div>'
+    );
+
+    try {
+      const application = await apiRequest('/supplier/application');
+      const supplier = application.supplier || {};
+
+      if (supplier.status !== 'approved') {
+        app.innerHTML = shell(
+          'تعديل المنتج',
+          'هذه الصفحة متاحة للموردين المعتمدين فقط.',
+          '<div class="panel"><button class="outline" data-page="supplier-application">متابعة طلب المورد</button></div>'
+        );
+        return;
+      }
+
+      const [productResponse, categoryResponse] = await Promise.all([
+        apiRequest(`/supplier/products/${encodeURIComponent(productId)}`),
+        apiRequest('/categories')
+      ]);
+
+      const product = productResponse.product;
+      if (!product) throw new Error('لم يتم العثور على بيانات المنتج.');
+
+      const existingImages = Array.isArray(product.images) ? product.images : [];
+      const productImageUrl = path =>
+        API_BASE.replace('/api/v1', '') + '/storage/' +
+        String(path).split('/').map(encodeURIComponent).join('/');
+
+      const existingImagesMarkup = existingImages.length
+        ? existingImages.map(image =>
+            `<div class="supplier-image-item" data-existing-image-id="${image.id}">
+              <img src="${escapeAdminHtml(productImageUrl(image.image_path))}" alt="صورة المنتج الحالية">
+              <button type="button" class="supplier-image-remove" data-remove-existing-image="${image.id}">حذف الصورة</button>
+            </div>`
+          ).join('')
+        : product.image_path
+          ? `<div class="supplier-image-item">
+              <img src="${escapeAdminHtml(productImageUrl(product.image_path))}" alt="صورة المنتج الحالية">
+              <span class="hint">الصورة القديمة ستتم إضافتها لسجل الصور عند أول حفظ.</span>
+            </div>`
+          : '<span>لا توجد صور حالية</span>';
+
+
+      const flatten = (items, level = 0) => {
+        let result = [];
+        (items || []).forEach(category => {
+          result.push({ ...category, level });
+          if (Array.isArray(category.children) && category.children.length) {
+            result = result.concat(flatten(category.children, level + 1));
+          }
+        });
+        return result;
+      };
+
+      const categoriesList = flatten(categoryResponse.data || []);
+      const categoryOptions = categoriesList.map(category =>
+        `<option value="${escapeAdminHtml(category.id)}" ${Number(category.id) === Number(product.category_id) ? 'selected' : ''}>${'— '.repeat(category.level)}${escapeAdminHtml(category.name_ar || category.name_en || 'قسم')}</option>`
+      ).join('');
+
+      app.innerHTML = shell(
+        'تعديل المنتج',
+        'عدّل البيانات المطلوبة. بعد الحفظ سيعود المنتج لمسودة لمراجعة الإدارة من جديد.',
+        `
+          <form class="panel form-grid" id="supplierProductEditForm">
+            <div class="field">
+              <label>اسم المنتج بالعربية *</label>
+              <input name="name_ar" type="text" maxlength="220" value="${escapeAdminHtml(product.name_ar || '')}" required>
+            </div>
+            <div class="field">
+              <label>اسم المنتج بالإنجليزية</label>
+              <input name="name_en" type="text" maxlength="220" value="${escapeAdminHtml(product.name_en || '')}">
+            </div>
+            <div class="field full">
+              <label>القسم</label>
+              <select name="category_id">
+                <option value="">اختر القسم (اختياري)</option>
+                ${categoryOptions}
+              </select>
+            </div>
+            <div class="field full">
+              <label>وصف المنتج</label>
+              <textarea name="description" rows="4">${escapeAdminHtml(product.description || '')}</textarea>
+            </div>
+            <div class="field full">
+              <label>صور المنتج الحالية والجديدة</label>
+              <div class="supplier-images-preview" id="supplierProductImagesPreview">
+                ${existingImagesMarkup}
+              </div>
+              <label>إضافة صور جديدة (اختياري)</label>
+              <input name="images[]" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+              <p class="hint">يمكنك إضافة صور حتى يصبح الإجمالي 5 صور. الصور الحالية ستظل محفوظة. الصيغ JPG وPNG وWebP، بحد أقصى 5 ميجابايت للصورة.</p>
+            </div>
+            <div class="field">
+              <label>وحدة البيع *</label>
+              <input name="unit_name" type="text" maxlength="50" value="${escapeAdminHtml(product.unit_name || '')}" required>
+            </div>
+            <div class="field">
+              <label>سعر الوحدة بالجنيه *</label>
+              <input name="unit_price" type="number" min="0" step="0.01" value="${escapeAdminHtml(product.unit_price ?? '')}" required>
+            </div>
+            <div class="field">
+              <label>الحد الأدنى للطلب *</label>
+              <input name="minimum_order_quantity" type="number" min="1" step="1" value="${escapeAdminHtml(product.minimum_order_quantity ?? '')}" required>
+            </div>
+            <div class="field">
+              <label>الكمية المتاحة *</label>
+              <input name="available_quantity" type="number" min="0" step="1" value="${escapeAdminHtml(product.available_quantity ?? '')}" required>
+            </div>
+            <div class="field full">
+              <p class="hint">حفظ أي تعديل سيعيد حالة المنتج إلى مسودة، وسيحتاج إلى موافقة الإدارة قبل ظهوره للعملاء.</p>
+              <button class="primary" type="submit">حفظ التعديلات وإرسالها للمراجعة</button>
+              <button class="outline" type="button" data-page="supplier-products">إلغاء والعودة لمنتجاتي</button>
+            </div>
+          </form>
+        `
+      );
+
+      const form = document.getElementById('supplierProductEditForm');
+
+      const imagesInput = form.querySelector('input[name="images[]"]');
+      const imagesPreview = document.getElementById('supplierProductImagesPreview');
+      const deletedImageIds = new Set();
+
+      const updateImageLimitHint = () => {
+        const remainingExisting = existingImages.length - deletedImageIds.size;
+        const remainingSlots = Math.max(0, 5 - remainingExisting);
+        const hint = imagesInput.parentElement.querySelector('.hint');
+        if (hint) {
+          hint.textContent = `يمكنك إضافة ${remainingSlots} صور جديدة. الحد الأقصى 5 صور إجمالًا.`;
+        }
+      };
+
+      imagesPreview.addEventListener('click', event => {
+        const button = event.target.closest('[data-remove-existing-image]');
+        if (!button) return;
+
+        const imageId = String(button.dataset.removeExistingImage);
+        const imageItem = button.closest('.supplier-image-item');
+
+        if (deletedImageIds.has(imageId)) {
+          deletedImageIds.delete(imageId);
+          imageItem?.classList.remove('marked-for-deletion');
+          button.textContent = 'حذف الصورة';
+        } else {
+          deletedImageIds.add(imageId);
+          imageItem?.classList.add('marked-for-deletion');
+          button.textContent = 'إلغاء الحذف';
+        }
+
+        updateImageLimitHint();
+      });
+
+      imagesInput.addEventListener('change', () => {
+        const files = Array.from(imagesInput.files || []);
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const remainingSlots = 5 - (existingImages.length - deletedImageIds.size);
+
+        if (files.length > remainingSlots) {
+          notify(`يمكنك إضافة ${remainingSlots} صور فقط لهذا المنتج.`);
+          imagesInput.value = '';
+          imagesPreview.querySelectorAll('.new-image-preview').forEach(img => img.remove());
+          return;
+        }
+
+        if (files.some(file => !validTypes.includes(file.type) || file.size > 5 * 1024 * 1024)) {
+          notify('تأكد أن كل الصور JPG أو PNG أو WebP وبحجم لا يتجاوز 5 ميجابايت.');
+          imagesInput.value = '';
+          imagesPreview.querySelectorAll('.new-image-preview').forEach(img => img.remove());
+          return;
+        }
+
+        imagesPreview.querySelectorAll('.new-image-preview').forEach(img => img.remove());
+
+        files.forEach(file => {
+          const img = document.createElement('img');
+          img.className = 'new-image-preview';
+          img.src = URL.createObjectURL(file);
+          img.alt = 'معاينة صورة جديدة';
+          imagesPreview.appendChild(img);
+        });
+      });
+
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+
+        const button = form.querySelector('button[type="submit"]');
+        const values = Object.fromEntries(new FormData(form).entries());
+
+        const payload = {
+          name_ar: values.name_ar.trim(),
+          name_en: values.name_en.trim() || null,
+          category_id: values.category_id ? Number(values.category_id) : null,
+          description: values.description.trim() || null,
+          unit_name: values.unit_name.trim(),
+          unit_price: Number(values.unit_price),
+          minimum_order_quantity: Number(values.minimum_order_quantity),
+          available_quantity: Number(values.available_quantity)
+        };
+
+        if (
+          !payload.name_ar ||
+          !payload.unit_name ||
+          !Number.isFinite(payload.unit_price) || payload.unit_price < 0 ||
+          !Number.isInteger(payload.minimum_order_quantity) || payload.minimum_order_quantity < 1 ||
+          !Number.isInteger(payload.available_quantity) || payload.available_quantity < 0
+        ) {
+          notify('راجع البيانات المدخلة وتأكد من صحة السعر والكميات.');
+          return;
+        }
+
+        button.disabled = true;
+        button.textContent = 'جارٍ حفظ التعديلات...';
+
+        try {
+          const formData = new FormData(form);
+          formData.set('_method', 'PUT');
+
+          deletedImageIds.forEach(id => {
+            formData.append('delete_image_ids[]', id);
+          });
+
+          Object.entries(payload).forEach(([key, value]) => {
+            formData.set(key, value === null ? '' : String(value));
+          });
+
+          const response = await apiRequest(`/supplier/products/${encodeURIComponent(productId)}`, {
+            method: 'POST',
+            body: formData
+          });
+
+          state.currentSupplierProductId = null;
+          notify(response.message || 'تم تحديث المنتج وإرساله للمراجعة.');
+          go('supplier-products');
+        } catch (error) {
+          notify(error.message || 'تعذر تحديث المنتج.');
+          button.disabled = false;
+          button.textContent = 'حفظ التعديلات وإرسالها للمراجعة';
+        }
+      });
+    } catch (error) {
+      app.innerHTML = shell(
+        'تعديل المنتج',
+        'تعذر تحميل بيانات المنتج.',
+        `<div class="panel">
+          <p>${escapeAdminHtml(error.message)}</p>
+          <button class="outline" data-page="supplier-products">العودة لمنتجاتي</button>
+          <button class="primary" data-page="supplier-product-edit">إعادة المحاولة</button>
+        </div>`
+      );
+    }
+  }
+
+
+  function supplierOrderStatusLabel(status) {
+    const labels = {
+      pending_payment: 'بانتظار العربون',
+      pending_shipping_cost: 'بانتظار تحديد تكلفة الشحن',
+      confirmed: 'تم تأكيد الطلب',
+      processing: 'قيد التجهيز',
+      shipped: 'تم الشحن',
+      delivered: 'تم التسليم',
+      cancelled: 'ملغي',
+      completed: 'مكتمل'
+    };
+
+    return labels[status] || status || 'غير محدد';
+  }
+
+  function supplierPaymentStatusLabel(status) {
+    const labels = {
+      pending: 'لم يتم الدفع',
+      pending_deposit: 'بانتظار العربون',
+      deposit_pending_review: 'العربون قيد المراجعة',
+      deposit_paid: 'تم دفع العربون',
+      partially_paid: 'مدفوع جزئيًا',
+      paid: 'مدفوع بالكامل',
+      completed: 'مكتمل',
+      refunded: 'تم رد المبلغ',
+      failed: 'فشل الدفع'
+    };
+
+    return labels[status] || status || 'غير محدد';
+  }
+
+  function renderSupplierOrders() {
+    if (
+      !state.token ||
+      !state.user ||
+      state.user.role !== 'supplier' ||
+      !state.supplierDashboard ||
+      !state.supplierDashboard.supplier
+    ) {
+      app.innerHTML = shell(
+        'طلبات المورد',
+        'هذه الصفحة متاحة للموردين المعتمدين فقط.',
+        '<div class="panel"><p>لا تتوفر صلاحية الدخول إلى طلبات المورد.</p><button class="outline" data-page="supplier-dashboard">العودة للوحة المورد</button></div>'
+      );
+      return;
+    }
+
+    app.innerHTML = shell(
+      'طلبات المورد',
+      'تابع الطلبات الواردة لنشاطك وتفاصيل كل طلب.',
+      `
+        <div class="panel admin-orders-toolbar">
+          <button class="outline" type="button" data-supplier-orders-action="back">العودة للوحة المورد</button>
+          <button class="outline" type="button" data-supplier-orders-action="refresh">تحديث الطلبات</button>
+        </div>
+        <div id="supplierOrdersList">
+          <div class="panel empty">جارٍ تحميل الطلبات...</div>
+        </div>
+      `
+    );
+
+    loadSupplierOrders();
+  }
+
+  async function loadSupplierOrders() {
+    const box = document.getElementById('supplierOrdersList');
+    if (!box) return;
+
+    box.innerHTML = '<div class="panel empty">جارٍ تحميل الطلبات...</div>';
+
+    try {
+      const result = await apiRequest('/supplier/orders');
+      const orders = Array.isArray(result.orders) ? result.orders : [];
+
+      state.supplierOrders = orders;
+
+      if (!orders.length) {
+        box.innerHTML = `
+          <div class="panel empty">
+            <h3>لا توجد طلبات حتى الآن</h3>
+            <p>ستظهر هنا الطلبات التي تحتوي على منتجات تابعة لنشاطك.</p>
+          </div>
+        `;
+        return;
+      }
+
+      box.innerHTML = orders.map(order => {
+        const item = order.item || (Array.isArray(order.items) ? order.items[0] : null);
+        const productName = item
+          ? (
+              item.product_name_ar ||
+              item.product_name_en ||
+              item.product_name ||
+              item.name_ar ||
+              item.name_en ||
+              item.name ||
+              item.product?.name_ar ||
+              item.product?.name_en ||
+              item.product?.name ||
+              'تفاصيل المنتج داخل الطلب'
+            )
+          : 'طلب متعدد المنتجات';
+
+        const typeLabel = order.type === 'individual'
+          ? 'طلب فردي'
+          : 'طلب متعدد الموردين';
+
+        const dateLabel = order.created_at
+          ? new Date(order.created_at).toLocaleString('ar-EG')
+          : '—';
+
+        return `
+          <article class="panel">
+            <div class="admin-orders-toolbar">
+              <h3>طلب رقم ${escapeAdminHtml(order.order_number || order.id)}</h3>
+              <span class="status">${escapeAdminHtml(supplierOrderStatusLabel(order.status))}</span>
+            </div>
+            <p><strong>نوع الطلب:</strong> ${typeLabel}</p>
+            <p><strong>المنتج:</strong> ${escapeAdminHtml(productName)}</p>
+            <p><strong>العميل:</strong> ${escapeAdminHtml(order.recipient_name || '—')}</p>
+            <p><strong>حالة الدفع:</strong> ${escapeAdminHtml(supplierPaymentStatusLabel(order.payment_status))}</p>
+            <p><strong>تاريخ الطلب:</strong> ${escapeAdminHtml(dateLabel)}</p>
+            <p><strong>إجمالي طلبك:</strong> ${Number(order.grand_total || 0).toLocaleString('ar-EG')} ج.م</p>
+            <button
+              class="primary"
+              type="button"
+              data-supplier-order-id="${escapeAdminHtml(order.id)}"
+              data-supplier-order-type="${escapeAdminHtml(order.type)}"
+            >عرض التفاصيل</button>
+          </article>
+        `;
+      }).join('');
+    } catch (error) {
+      box.innerHTML = `
+        <div class="panel empty">
+          <p>تعذر تحميل الطلبات: ${escapeAdminHtml(error.message)}</p>
+          <button class="outline" type="button" data-supplier-orders-action="refresh">إعادة المحاولة</button>
+        </div>
+      `;
+    }
+  }
+
+
+  async function openSupplierOrder(type, id, button = null) {
+    if (!type || !id) return;
+
+    const originalText = button ? button.textContent : null;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'جارٍ تحميل التفاصيل...';
+    }
+
+    try {
+      const result = await apiRequest(
+        '/supplier/orders/' +
+        encodeURIComponent(type) + '/' +
+        encodeURIComponent(id)
+      );
+
+      if (!result || !result.order) {
+        throw new Error('لم يتم العثور على تفاصيل الطلب');
+      }
+
+      state.currentSupplierOrder = {
+        type: result.type || type,
+        order: result.order
+      };
+
+      go('supplier-order-details');
+    } catch (error) {
+      notify(error.message || 'تعذر تحميل تفاصيل الطلب');
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'عرض التفاصيل';
+      }
+    }
+  }
+
+  function renderSupplierOrderDetails() {
+    const current = state.currentSupplierOrder;
+
+    if (
+      !state.token ||
+      !state.user ||
+      state.user.role !== 'supplier' ||
+      !state.supplierDashboard ||
+      !state.supplierDashboard.supplier ||
+      !current ||
+      !current.order
+    ) {
+      app.innerHTML = shell(
+        'تفاصيل الطلب',
+        'لا تتوفر بيانات الطلب أو صلاحية الوصول.',
+        '<div class="panel"><button class="outline" data-page="supplier-orders">العودة للطلبات</button></div>'
+      );
+      return;
+    }
+
+    const order = current.order;
+    const type = current.type;
+    const items = type === 'individual'
+      ? (order.item ? [order.item] : [])
+      : (Array.isArray(order.items) ? order.items : []);
+
+    const money = value =>
+      Number(value || 0).toLocaleString('ar-EG', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }) + ' ج.م';
+
+    const dateLabel = order.created_at
+      ? new Date(order.created_at).toLocaleString('ar-EG')
+      : '—';
+
+    const addressParts = [
+      order.governorate,
+      order.city
+    ].filter(Boolean);
+
+    const addressLabel = addressParts.length
+      ? addressParts.join(' - ')
+      : '—';
+
+    const typeLabel = type === 'individual'
+      ? 'طلب فردي'
+      : 'طلب متعدد الموردين';
+
+    app.innerHTML = shell(
+      'تفاصيل الطلب',
+      'مراجعة بيانات الطلب والأصناف الخاصة بنشاطك.',
+      `
+        <div class="panel admin-orders-toolbar">
+          <button class="outline" type="button" data-supplier-orders-action="back">العودة للطلبات</button>
+          <button class="outline" type="button" data-supplier-orders-action="refresh-details">تحديث التفاصيل</button>
+        </div>
+
+        <section class="panel">
+          <div class="admin-orders-toolbar">
+            <h3>طلب رقم ${escapeAdminHtml(order.order_number || order.id)}</h3>
+            <span class="status">${escapeAdminHtml(supplierOrderStatusLabel(order.status))}</span>
+          </div>
+          <p><strong>نوع الطلب:</strong> ${typeLabel}</p>
+          <p><strong>حالة الدفع:</strong> ${escapeAdminHtml(supplierPaymentStatusLabel(order.payment_status))}</p>
+          <p><strong>تاريخ الطلب:</strong> ${escapeAdminHtml(dateLabel)}</p>
+        </section>
+
+        <section class="panel">
+          <h3>بيانات العميل والتوصيل</h3>
+          <p><strong>اسم المستلم:</strong> ${escapeAdminHtml(order.recipient_name || '—')}</p>
+          <p><strong>المحافظة والمدينة:</strong> ${escapeAdminHtml(addressLabel)}</p>
+        </section>
+
+        <section class="panel">
+          <h3>أصناف طلبك</h3>
+          ${
+            items.length
+              ? items.map(item => `
+                  <article class="panel">
+                    <h4>${escapeAdminHtml(item.product_name_ar || item.product_name_en || 'منتج')}</h4>
+                    <p><strong>الوحدة:</strong> ${escapeAdminHtml(item.unit_name || '—')}</p>
+                    <p><strong>سعر الوحدة:</strong> ${money(item.unit_price)}</p>
+                    <p><strong>الكمية:</strong> ${escapeAdminHtml(item.quantity ?? '—')}</p>
+                    <p><strong>إجمالي الصنف:</strong> ${money(item.line_total)}</p>
+                  </article>
+                `).join('')
+              : '<p>لا توجد تفاصيل أصناف متاحة لهذا الطلب.</p>'
+          }
+        </section>
+
+        <section class="panel">
+          <h3>ملخص المبالغ</h3>
+          <p><strong>قيمة المنتجات:</strong> ${money(order.subtotal)}</p>
+          <p><strong>تكلفة الشحن:</strong> ${money(order.shipping_total)}</p>
+          <p><strong>إجمالي الطلب:</strong> ${money(order.grand_total)}</p>
+          <p><strong>قيمة العربون:</strong> ${money(order.deposit_amount)}</p>
+          <p><strong>الرصيد المتبقي:</strong> ${money(order.balance_amount)}</p>
+        </section>
+
+        ${
+          order.cancellation_reason
+            ? `<section class="panel"><h3>سبب الإلغاء</h3><p>${escapeAdminHtml(order.cancellation_reason)}</p></section>`
+            : ''
+        }
+
+        <div class="panel">
+          <p>هذه التفاصيل للعرض والمتابعة فقط. تحديث حالة الطلب ومراجعة المدفوعات من اختصاص الإدارة.</p>
+        </div>
+      `
+    );
+  }
+
+  function renderSupplierDashboard() {
+    const data = state.supplierDashboard;
+
+    if (!state.token || !data || !data.supplier) {
+      app.innerHTML = shell(
+        'لوحة المورد',
+        'هذه الصفحة متاحة للموردين المعتمدين فقط.',
+        '<div class="panel"><p>لا تتوفر صلاحية الدخول إلى لوحة المورد.</p><button class="outline" data-page="home">العودة للسوق</button></div>'
+      );
+      return;
+    }
+
+    const supplier = data.supplier;
+    const products = data.products || {};
+    const orders = data.orders || {};
+
+    app.innerHTML = shell(
+      'لوحة المورد',
+      'إدارة نشاطك ومنتجاتك وطلباتك على GOZORX.',
+      `
+        <section class="panel">
+          <h2>${escapeAdminHtml(supplier.business_name || 'نشاط المورد')}</h2>
+          <p>${escapeAdminHtml(supplier.business_type || '')}</p>
+          <p>${escapeAdminHtml(supplier.address || '')}</p>
+          <span class="status">حالة الحساب: معتمد</span>
+        </section>
+
+        <div class="admin-order-grid">
+          <article class="panel">
+            <h3>إجمالي المنتجات</h3>
+            <strong>${Number(products.total || 0)}</strong>
+          </article>
+          <article class="panel">
+            <h3>المنتجات المنشورة</h3>
+            <strong>${Number(products.published || 0)}</strong>
+          </article>
+          <article class="panel">
+            <h3>منتجات المسودة</h3>
+            <strong>${Number(products.draft || 0)}</strong>
+          </article>
+          <article class="panel">
+            <h3>المنتجات المرفوضة</h3>
+            <strong>${Number(products.rejected || 0)}</strong>
+          </article>
+          <article class="panel">
+            <h3>إجمالي الطلبات</h3>
+            <strong>${Number(orders.total || 0)}</strong>
+          </article>
+          <article class="panel">
+            <h3>الطلبات النشطة</h3>
+            <strong>${Number(orders.active || 0)}</strong>
+          </article>
+          <article class="panel">
+            <h3>الطلبات المكتملة</h3>
+            <strong>${Number(orders.completed || 0)}</strong>
+          </article>
+        </div>
+
+        <section class="panel">
+          <h3>إدارة المنتجات</h3>
+          <button class="primary" data-page="supplier-products" type="button">عرض منتجاتي</button>
+          <button class="primary" data-page="supplier-add-product" type="button">إضافة منتج جديد</button>
+        </section>
+
+        <section class="panel">
+          <h3>إدارة الطلبات</h3>
+          <p>تابع الطلبات الواردة من العملاء وتفاصيل المنتجات والتسليم.</p>
+          <button class="primary" data-page="supplier-orders" type="button">عرض الطلبات</button>
+        </section>
+
+        <section class="panel">
+          <button class="outline" data-page="supplier-application" type="button">بيانات طلب المورد</button>
+          <button class="outline" data-page="home" type="button">العودة للسوق</button>
+        </section>
+      `
+    );
+  }
+
+
+  async function renderSupplierProducts() {
+    if (!state.token || !state.user || state.user.role === 'admin') {
+      app.innerHTML = shell(
+        'منتجاتي',
+        'هذه الصفحة متاحة للموردين المعتمدين فقط.',
+        '<div class="panel"><button class="primary" data-page="login">تسجيل الدخول</button></div>'
+      );
+      return;
+    }
+
+    app.innerHTML = shell(
+      'منتجاتي',
+      'جارٍ تحميل منتجات نشاطك...',
+      '<div class="panel empty">يرجى الانتظار...</div>'
+    );
+
+    try {
+      const result = await apiRequest('/supplier/products');
+      const products = Array.isArray(result.data) ? result.data : [];
+
+      const statusLabels = {
+        published: 'منشور في السوق',
+        draft: 'مسودة — بانتظار المراجعة',
+        rejected: 'مرفوض'
+      };
+
+      const content = products.length
+        ? products.map(product => `
+          <article class="panel admin-order-card">
+            <div class="admin-order-heading">
+              <h3>${escapeAdminHtml(product.name_ar || product.name_en || 'منتج')}</h3>
+              <span class="status">${escapeAdminHtml(statusLabels[product.status] || product.status || 'غير محدد')}</span>
+            </div>
+            <div class="admin-order-grid">
+              <div><span>رقم المنتج</span><strong>${escapeAdminHtml(product.id)}</strong></div>
+              <div><span>السعر</span><strong>${escapeAdminHtml(product.unit_price)} جنيه</strong></div>
+              <div><span>وحدة البيع</span><strong>${escapeAdminHtml(product.unit_name || '—')}</strong></div>
+              <div><span>الحد الأدنى للطلب</span><strong>${escapeAdminHtml(product.minimum_order_quantity ?? '—')}</strong></div>
+              <div><span>الكمية المتاحة</span><strong>${escapeAdminHtml(product.available_quantity ?? '—')}</strong></div>
+              <div><span>القسم</span><strong>${escapeAdminHtml(product.category?.name_ar || '—')}</strong></div>
+            </div>
+            ${product.description ? `<p>${escapeAdminHtml(product.description)}</p>` : ''}
+            <div class="admin-product-actions">
+              <button class="primary" type="button"
+                data-supplier-product-edit="${escapeAdminHtml(product.id)}">تعديل المنتج</button>
+            </div>
+          </article>
+        `).join('')
+        : '<div class="panel empty">لم تضف أي منتجات حتى الآن.</div>';
+
+      app.innerHTML = shell(
+        'منتجاتي',
+        'تابع منتجاتك وحالات مراجعتها، ويمكنك تعديل أي منتج.',
+        `
+          <div class="admin-orders-toolbar panel">
+            <button class="outline" type="button" data-supplier-products-action="refresh">تحديث القائمة</button>
+            <button class="primary" type="button" data-page="supplier-add-product">إضافة منتج جديد</button>
+          </div>
+          <div id="supplierProductsList">${content}</div>
+          <section class="panel">
+            <button class="outline" type="button" data-page="supplier-dashboard">العودة إلى لوحة المورد</button>
+          </section>
+        `
+      );
+    } catch (error) {
+      app.innerHTML = shell(
+        'منتجاتي',
+        'تعذر تحميل قائمة المنتجات.',
+        `<div class="panel">
+          <p>${escapeAdminHtml(error.message)}</p>
+          <button class="outline" type="button" data-supplier-products-action="refresh">إعادة المحاولة</button>
+          <button class="outline" type="button" data-page="supplier-dashboard">لوحة المورد</button>
+        </div>`
+      );
+    }
+  }
+
   function renderHome(){return homeMarkup;}
   function render(){
     if(state.page==='home'){app.innerHTML=renderHome();return;}
+
+    if(state.page==='supplier-dashboard'){
+      renderSupplierDashboard();
+      return;
+    }
+
+    if(state.page==='supplier-products'){
+      renderSupplierProducts();
+      return;
+    }
+
+    if(state.page==='supplier-orders'){
+      renderSupplierOrders();
+      return;
+    }
+
+    if(state.page==='supplier-order-details'){
+      renderSupplierOrderDetails();
+      return;
+    }
+
+    if(state.page==='supplier-application'){
+      renderSupplierApplication();
+      return;
+    }
+
+    if(state.page==='supplier-add-product'){
+      renderSupplierAddProduct();
+      return;
+    }
+
+    if(state.page==='supplier-product-edit'){
+      renderSupplierProductEdit();
+      return;
+    }
+
+    if(state.page==='admin-products'){
+      renderAdminProducts();
+      return;
+    }
+
+    if(state.page==='admin-suppliers'){
+      renderAdminSuppliers();
+      return;
+    }
+
+    if(state.page==='admin-supplier-details'){
+      renderAdminSupplierDetails();
+      return;
+    }
 
     if(state.page==='admin-payments'){
       renderAdminPayments();
@@ -776,6 +2524,7 @@ const supplierSections = individualSection || legacySupplierSections ||
       const payment = order.deposit_transaction || null;
       const labels = {
         pending_payment: 'بانتظار العربون',
+        pending_shipping_cost: 'بانتظار تحديد تكلفة الشحن',
         confirmed: 'تم تأكيد الطلب',
         processing: 'قيد التجهيز',
         shipped: 'تم الشحن',
@@ -792,10 +2541,29 @@ const supplierSections = individualSection || legacySupplierSections ||
             ? 'تم اعتماد العربون'
             : 'بانتظار مراجعة الإدارة';
 
-      const reviewNote = payment?.review_note
-        ? '<div class="payment-notice"><strong>سبب الرفض أو ملاحظة الإدارة:</strong><p>' +
-          escapeAdminHtml(payment.review_note) + '</p></div>'
-        : '';
+            const shippingPending = order.status === 'pending_shipping_cost';
+
+      const totalDisplay = shippingPending
+        ? 'بانتظار تحديد الشحن'
+        : `${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه`;
+
+      const depositDisplay = shippingPending
+        ? 'يُحدد بعد الشحن'
+        : `${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه`;
+
+      const balanceDisplay = shippingPending
+        ? 'يُحدد بعد الشحن'
+        : `${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه`;
+            const reviewNoteTitle = payment?.status === 'pending'
+  ? 'ملاحظة بخصوص الإيصال السابق:'
+  : 'سبب الرفض أو ملاحظة الإدارة:';
+
+const reviewNote = payment?.review_note
+  ? `<div class="payment-notice">
+      <strong>${reviewNoteTitle}</strong>
+      <p>${escapeAdminHtml(payment.review_note)}</p>
+    </div>`
+  : '';
 
  const individualItem = order.individual_item || order.individualItem || null;
 const individualSupplier = order.supplier || {};
@@ -875,9 +2643,9 @@ const supplierSections = individualSection || legacySupplierSections ||
           <div class="panel order-payment-summary">
             <h3>ملخص الطلب</h3>
             <p>حالة الطلب: <strong>${escapeAdminHtml(labels[order.status] || order.status || 'غير محدد')}</strong></p>
-            <p>إجمالي الطلب: <strong>${Number(order.grand_total || 0).toLocaleString('ar-EG')} جنيه</strong></p>
-            <p>العربون (30%): <strong>${Number(order.deposit_amount || 0).toLocaleString('ar-EG')} جنيه</strong></p>
-            <p>المتبقي عند الاستلام (70%): <strong>${Number(order.balance_amount || 0).toLocaleString('ar-EG')} جنيه</strong></p>
+            <p>إجمالي الطلب: <strong>${escapeAdminHtml(totalDisplay)}</strong></p>
+            <p>العربون (30%): <strong>${escapeAdminHtml(depositDisplay)}</strong></p>
+            <p>المتبقي عند الاستلام (70%): <strong>${escapeAdminHtml(balanceDisplay)}</strong></p>
             <p>حالة الإيصال: <strong>${receiptStatus}</strong></p>
           </div>
           ${reviewNote}
@@ -920,7 +2688,9 @@ const supplierSections = individualSection || legacySupplierSections ||
       function draw(products){
         container.innerHTML = products.map(p => `
           <article class="product" data-product-id="${safe(p.id)}" role="button" tabindex="0">
-            <div class="product-img">🌱</div>
+            <div class="product-img">${p.image_path
+              ? `<img src="${safe(API_BASE.replace(/\/api\/v1\/?$/, '') + '/storage/' + String(p.image_path).split('/').map(encodeURIComponent).join('/'))}" alt="${safe(p.name_ar || p.name_en || 'منتج زراعي')}" loading="lazy">`
+              : '🌱'}</div>
             <div class="product-body">
               <h3>${safe(p.name_ar || p.name_en || 'منتج زراعي')}</h3>
               <p>${safe(p.category?.name_ar || 'قسم غير محدد')}</p>
@@ -1112,21 +2882,18 @@ const supplierSections = individualSection || legacySupplierSections ||
             body: JSON.stringify(payload)
           });
 
-          if(!result.order){
-            throw new Error('تم الاتصال بالخادم لكن لم يتم استلام بيانات الطلب.');
-          }
+          if (!Array.isArray(result.orders) || result.orders.length === 0) {
+  throw new Error('تم الاتصال بالخادم لكن لم يتم استلام بيانات الطلبات.');
+}
 
-          state.currentOrder = result.order;
-          state.currentOrder.receipt_uploaded = false;
-            localStorage.setItem(
-              'gozorx_current_order_id',
-              String(result.order.id)
-            );
-          state.cart = [];
-          updateCartCount();
+state.currentOrder = null;
+localStorage.removeItem('gozorx_current_order_id');
 
-          notify('تم إنشاء الطلب وحجز الكميات لمدة 24 ساعة');
-          go('order-payment');
+state.cart = [];
+updateCartCount();
+
+notify('تم إنشاء طلباتك بنجاح. يمكنك متابعة حالتها من صفحة طلباتي.');
+go('my-orders');
         } catch(error) {
           notify(error.message);
           checkoutButton.disabled = false;
@@ -1359,12 +3126,52 @@ const supplierSections = individualSection || legacySupplierSections ||
         '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
       })[ch]);
 
+      const storageBase = API_BASE.replace(/\/api\/v1\/?$/, '');
+      const detailImages = Array.isArray(p.images)
+        ? p.images.map(image => ({
+            url: image.image_path
+              ? storageBase + '/storage/' + String(image.image_path).split('/').map(encodeURIComponent).join('/')
+              : (image.image_url
+                  ? (/^https?:\/\//i.test(image.image_url)
+                      ? image.image_url
+                      : storageBase + (image.image_url.startsWith('/') ? '' : '/') + image.image_url)
+                  : '')
+          })).filter(image => image.url)
+        : [];
+
+      if (!detailImages.length && p.image_path) {
+        detailImages.push({
+          url: storageBase + '/storage/' + String(p.image_path).split('/').map(encodeURIComponent).join('/')
+        });
+      }
+
       app.innerHTML = shell(
         'تفاصيل المنتج',
         'تعرف على مواصفات المنتج ومعلومات المورد.',
         `<button class="textbtn detail-back" data-page="market">← العودة إلى السوق</button>
         <div class="product-detail">
-          <div class="product-detail-image">🌱</div>
+          <div class="product-detail-gallery">
+            <div class="product-detail-image" id="productDetailMainImage">
+              ${detailImages.length
+                ? `<img src="${safeDetail(detailImages[0].url)}" alt="${safeDetail(p.name_ar || p.name_en || 'منتج زراعي')}" loading="lazy">`
+                : '🌱'}
+            </div>
+            ${detailImages.length > 1
+              ? `<div class="product-detail-arrows">
+                  <button type="button" data-detail-image-prev aria-label="الصورة السابقة">❮</button>
+                  <button type="button" data-detail-image-next aria-label="الصورة التالية">❯</button>
+                </div>`
+              : ''}
+            ${detailImages.length > 1
+              ? `<div class="product-detail-thumbnails">
+                  ${detailImages.map((image, index) =>
+                    `<button type="button" class="product-detail-thumb ${index === 0 ? 'active' : ''}" data-detail-image-index="${index}" aria-label="عرض الصورة ${index + 1}">
+                      <img src="${safeDetail(image.url)}" alt="صورة ${index + 1}" loading="lazy">
+                    </button>`
+                  ).join('')}
+                </div>`
+              : ''}
+          </div>
           <div class="product-detail-body">
             <span class="eyebrow">GOZORX MARKET</span>
             <h2>${safeDetail(p.name_ar || p.name_en || 'منتج زراعي')}</h2>
@@ -1386,6 +3193,41 @@ const supplierSections = individualSection || legacySupplierSections ||
           </div>
         </div>`
       );
+
+      let currentDetailImageIndex = 0;
+
+      const showDetailImage = index => {
+        if (!detailImages.length) return;
+
+        currentDetailImageIndex =
+          (index + detailImages.length) % detailImages.length;
+
+        const selectedImage = detailImages[currentDetailImageIndex];
+        const mainImage = document.querySelector('#productDetailMainImage img');
+
+        if (mainImage) {
+          mainImage.src = selectedImage.url;
+          mainImage.alt = `صورة ${currentDetailImageIndex + 1} من المنتج`;
+        }
+
+        document.querySelectorAll('.product-detail-thumb').forEach((thumb, thumbIndex) => {
+          thumb.classList.toggle('active', thumbIndex === currentDetailImageIndex);
+        });
+      };
+
+      document.querySelectorAll('[data-detail-image-index]').forEach(button => {
+        button.addEventListener('click', () => {
+          showDetailImage(Number(button.dataset.detailImageIndex));
+        });
+      });
+
+      document.querySelector('[data-detail-image-prev]')?.addEventListener('click', () => {
+        showDetailImage(currentDetailImageIndex - 1);
+      });
+
+      document.querySelector('[data-detail-image-next]')?.addEventListener('click', () => {
+        showDetailImage(currentDetailImageIndex + 1);
+      });
 
       document.getElementById('detailCartBtn').addEventListener('click', () => {
         const quantityInput = document.getElementById('detailQuantity');
@@ -1422,9 +3264,166 @@ const supplierSections = individualSection || legacySupplierSections ||
     }
 
     if(state.page==='join'){
-      app.innerHTML=shell('طلب انضمام مورد','قدّم بياناتك للمراجعة. لن تتمكن من نشر المنتجات قبل موافقة الإدارة.','<form class="panel form-grid" id="supplierForm">'+field('اسم المسؤول','contact_name')+field('اسم المشتل / الشركة','business_name')+field('رقم الهاتف','phone','tel')+field('البريد الإلكتروني','email','email')+'<div class="field"><label>المحافظة</label><input name="governorate" required></div><div class="field"><label>المدينة</label><input name="city" required></div><div class="field full"><label>نبذة عن النشاط والمنتجات</label><textarea name="description" required></textarea></div><div class="field full"><button class="primary">إرسال طلب الانضمام</button><small class="hint">هذه نسخة عرض: الطلب لا يُحفظ على خادم ولا يُرسل للإدارة فعليًا.</small></div></form>');
-      document.getElementById('supplierForm').addEventListener('submit',e=>{e.preventDefault();state.suppliers.push(Object.fromEntries(new FormData(e.target)));notify('تم تسجيل الطلب في هذه الجلسة التجريبية فقط');e.target.reset();});return;
+      const loggedIn = Boolean(state.token && state.user);
+
+      if(loggedIn){
+        app.innerHTML = shell(
+          'إنشاء حساب مورد مستقل',
+          'حساب المشتري وحساب المورد منفصلان تمامًا. لتقديم طلب مورد، سجّل الخروج أولًا ثم افتح صفحة انضمام المورد لإنشاء حساب مستقل.',
+          '<div class="panel"><p>لن يتم تحويل حسابك الحالي أو تغيير دوره.</p><button class="primary" data-page="home">العودة إلى السوق</button></div>'
+        );
+        return;
+      }
+
+      const accountFields =
+        `<div class="field full"><strong>إنشاء حساب المورد</strong><p class="hint">أدخل بياناتك لإنشاء حساب مورد مستقل وتقديم طلبك في نفس الخطوة.</p></div>
+         <div class="field"><label>الاسم بالكامل</label><input name="full_name" required maxlength="160"></div>
+         <div class="field"><label>رقم الهاتف</label><input name="phone" type="tel" required maxlength="30"></div>
+         <div class="field"><label>البريد الإلكتروني</label><input name="email" type="email" required maxlength="255"></div>
+         <div class="field"><label>كلمة المرور (10 أحرف على الأقل)</label><input name="password" type="password" required minlength="10"></div>
+         <div class="field"><label>تأكيد كلمة المرور</label><input name="password_confirmation" type="password" required minlength="10"></div>`;
+
+      app.innerHTML=shell(
+        'طلب انضمام مورد',
+        'أكمل بيانات نشاطك وارفع المستندات الأربعة. لن تتمكن من نشر المنتجات قبل مراجعة الإدارة والموافقة.',
+        `<form class="panel form-grid" id="supplierForm" enctype="multipart/form-data">
+          ${accountFields}
+
+          <div class="field">
+            <label>اسم المشتل / الشركة</label>
+            <input name="business_name" required maxlength="200">
+          </div>
+
+          <div class="field">
+            <label>نوع النشاط</label>
+            <input name="business_type" maxlength="100">
+          </div>
+
+          <div class="field full">
+            <label>العنوان بالتفصيل</label>
+            <textarea name="address" required maxlength="2000"></textarea>
+          </div>
+
+          <input type="hidden" name="latitude" required>
+          <input type="hidden" name="longitude" required>
+
+          <div class="field full">
+            <button class="secondary" type="button" id="supplierUseLocation">تحديد موقعي الحالي</button>
+            <small class="hint" id="supplierLocationStatus">اضغط على الزر للسماح بتحديد موقعك.</small>
+          </div>
+
+          <div class="field full">
+            <label>نبذة عن النشاط والمنتجات</label>
+            <textarea name="description" maxlength="5000"></textarea>
+          </div>
+
+          <div class="field full">
+            <strong>المستندات المطلوبة</strong>
+            <small class="hint">الملفات PDF أو صور حسب نوع المستند، والحد الأقصى 10 ميجابايت لكل ملف.</small>
+          </div>
+
+          <div class="field">
+            <label>السجل التجاري</label>
+            <input type="file" name="commercial_register" accept=".pdf,.jpg,.jpeg,.png" required>
+          </div>
+
+          <div class="field">
+            <label>البطاقة الضريبية</label>
+            <input type="file" name="tax_card" accept=".pdf,.jpg,.jpeg,.png" required>
+          </div>
+
+          <div class="field">
+            <label>الصورة الشخصية</label>
+            <input type="file" name="personal_photo" accept=".jpg,.jpeg,.png" required>
+          </div>
+
+          <div class="field">
+            <label>صورة بطاقة الرقم القومي</label>
+            <input type="file" name="national_id" accept=".jpg,.jpeg,.png" required>
+          </div>
+
+          <div class="field full">
+            <button class="primary" type="submit">إنشاء الحساب وإرسال طلب المورد</button>
+            <small class="hint">سيظل طلبك قيد المراجعة حتى اعتماد المستندات الأربعة من الإدارة.</small>
+          </div>
+        </form>`
+      );
+
+      document.getElementById('supplierUseLocation').addEventListener('click', () => {
+        if(!navigator.geolocation){
+          notify('المتصفح لا يدعم تحديد الموقع.');
+          return;
+        }
+
+        const form = document.getElementById('supplierForm');
+        const locationButton = document.getElementById('supplierUseLocation');
+        const locationStatus = document.getElementById('supplierLocationStatus');
+
+        locationButton.disabled = true;
+        locationButton.textContent = 'جارٍ تحديد الموقع...';
+        locationStatus.textContent = 'يرجى السماح للمتصفح بالوصول إلى موقعك.';
+
+        navigator.geolocation.getCurrentPosition(
+          position => {
+            form.elements.latitude.value = position.coords.latitude;
+            form.elements.longitude.value = position.coords.longitude;
+            locationButton.disabled = false;
+            locationButton.textContent = 'تم تحديد الموقع — اضغط لإعادة التحديد';
+            locationStatus.textContent = 'تم تحديد موقعك بنجاح.';
+            notify('تم تحديد موقعك بنجاح.');
+          },
+          () => {
+            locationButton.disabled = false;
+            locationButton.textContent = 'تحديد موقعي الحالي';
+            locationStatus.textContent = 'تعذر تحديد الموقع. تحقق من إذن الموقع وحاول مرة أخرى.';
+            notify('تعذر تحديد الموقع. تأكد من السماح للمتصفح باستخدام الموقع.');
+          },
+          { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 }
+        );
+      });
+
+      document.getElementById('supplierForm').addEventListener('submit', async e => {
+        e.preventDefault();
+
+        const form = e.target;
+        const button = form.querySelector('button[type="submit"]');
+
+        if(!form.elements.latitude.value || !form.elements.longitude.value){
+          notify('يرجى تحديد موقعك باستخدام الزر قبل إرسال الطلب.');
+          return;
+        }
+
+        if(!loggedIn && form.elements.password.value !== form.elements.password_confirmation.value){
+          notify('كلمتا المرور غير متطابقتين.');
+          return;
+        }
+
+        const formData = new FormData(form);
+        button.disabled = true;
+        button.textContent = 'جارٍ إرسال الطلب والمستندات...';
+
+        try {
+          const endpoint = '/supplier/register';
+          const result = await apiRequest(endpoint, {
+            method: 'POST',
+            body: formData
+          });
+
+          saveSession(result);
+          updateAccountArea();
+
+          notify(result.message || 'تم إرسال طلب المورد بنجاح.');
+          go('home');
+        } catch(error) {
+          notify(error.message || 'تعذر إرسال الطلب.');
+          button.disabled = false;
+          button.textContent = 'إنشاء الحساب وإرسال طلب المورد';
+        }
+      });
+
+      return;
     }
+
     if(state.page==='login'){
       app.innerHTML=shell(
         'تسجيل الدخول',
@@ -1457,12 +3456,12 @@ const supplierSections = individualSection || legacySupplierSections ||
           notify('تم تسجيل الدخول بنجاح');
           const shouldReturnToCheckout = state.returnToCheckout;
           state.returnToCheckout = false;
-
-          if (shouldReturnToCheckout) {
-            go('checkout');
-          } else if (!(await restoreCurrentOrder(true))) {
-            go('home');
-          }
+if (shouldReturnToCheckout) {
+  go('checkout');
+} else {
+  await restoreCurrentOrder(false);
+  go('home');
+}
         } catch (error) {
           notify(error.message);
         } finally {
@@ -1546,6 +3545,12 @@ const supplierSections = individualSection || legacySupplierSections ||
     app.innerHTML=shell('قريبًا','هذه الوظيفة ضمن مراحل تطوير GOZORX.','<div class="panel">سيتم تفعيلها بعد تجهيز الخادم وقاعدة البيانات.</div>');
   }
   document.addEventListener('click', async e=>{
+    const supplierApplicationAction = e.target.closest('[data-supplier-application-action]');
+    if (supplierApplicationAction) {
+      await renderSupplierApplication();
+      return;
+    }
+
     const refreshOrders = e.target.closest('[data-my-orders-action]');
     if (refreshOrders) {
       await loadMyOrders();
@@ -1563,6 +3568,91 @@ const supplierSections = individualSection || legacySupplierSections ||
       return;
     }
 
+    const adminProductsAction = e.target.closest('[data-admin-products-action]');
+    if (adminProductsAction) {
+      await loadAdminProducts();
+      return;
+    }
+
+    const adminProductButton = e.target.closest('[data-admin-product-action]');
+    if (adminProductButton) {
+      await handleAdminProductDecision(
+        adminProductButton.dataset.adminProductAction,
+        adminProductButton.dataset.productId,
+        adminProductButton
+      );
+      return;
+    }
+
+    const supplierAction = e.target.closest('[data-admin-suppliers-action]');
+    if (supplierAction) {
+      const action = supplierAction.dataset.adminSuppliersAction;
+      if (action === 'back') {
+        state.currentAdminSupplier = null;
+        go('admin-suppliers');
+      } else {
+        await loadAdminSuppliers();
+      }
+      return;
+    }
+
+    const supplierButton = e.target.closest('[data-admin-supplier-id]');
+    if (supplierButton) {
+      await openAdminSupplier(supplierButton.dataset.adminSupplierId);
+      return;
+    }
+
+    const supplierDocButton = e.target.closest('[data-admin-supplier-doc-action]');
+    if (supplierDocButton) {
+      await handleAdminSupplierDocumentAction(
+        supplierDocButton.dataset.adminSupplierDocAction,
+        supplierDocButton.dataset.documentId,
+        supplierDocButton
+      );
+      return;
+    }
+
+    const supplierProductsAction = e.target.closest('[data-supplier-products-action]');
+    if (supplierProductsAction) {
+      await renderSupplierProducts();
+      return;
+    }
+
+    const supplierProductEditButton = e.target.closest('[data-supplier-product-edit]');
+    if (supplierProductEditButton) {
+      state.currentSupplierProductId = supplierProductEditButton.dataset.supplierProductEdit;
+      go('supplier-product-edit');
+      return;
+    }
+
+    const supplierOrdersAction = e.target.closest('[data-supplier-orders-action]');
+    if (supplierOrdersAction) {
+      const action = supplierOrdersAction.dataset.supplierOrdersAction;
+
+      if (action === 'back') {
+        state.currentSupplierOrder = null;
+        go('supplier-orders');
+      } else if (action === 'refresh') {
+        await loadSupplierOrders();
+      } else if (action === 'refresh-details') {
+        const current = state.currentSupplierOrder;
+        if (current && current.order) {
+          await openSupplierOrder(current.type, current.order.id);
+        }
+      }
+      return;
+    }
+
+    const supplierOrderButton = e.target.closest('[data-supplier-order-id]');
+    if (supplierOrderButton) {
+      await openSupplierOrder(
+        supplierOrderButton.dataset.supplierOrderType,
+        supplierOrderButton.dataset.supplierOrderId,
+        supplierOrderButton
+      );
+      return;
+    }
+
     const adminOrdersAction = e.target.closest('[data-admin-orders-action]');
     if (adminOrdersAction) {
       const action = adminOrdersAction.dataset.adminOrdersAction;
@@ -1573,6 +3663,36 @@ const supplierSections = individualSection || legacySupplierSections ||
       } else if (action === 'refresh' || action === 'search') {
         await loadAdminOrders();
       }
+      return;
+    }
+
+    const adminOrderStatusButton = e.target.closest('[data-admin-order-status]');
+    if (adminOrderStatusButton) {
+      const nextStatus = adminOrderStatusButton.dataset.adminOrderStatus;
+      const order = state.currentAdminOrder;
+
+      if (!order || !nextStatus) return;
+
+      adminOrderStatusButton.disabled = true;
+      adminOrderStatusButton.textContent = 'جارٍ تحديث حالة الطلب...';
+
+      try {
+        await apiRequest(
+          '/admin/orders/' + encodeURIComponent(order.id) + '/status',
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ status: nextStatus })
+          }
+        );
+
+        notify('تم تحديث حالة الطلب بنجاح');
+        await openAdminOrder(order.id);
+      } catch (error) {
+        notify(error.message);
+        adminOrderStatusButton.disabled = false;
+        adminOrderStatusButton.textContent = 'تحديث حالة الطلب';
+      }
+
       return;
     }
 
@@ -1676,7 +3796,11 @@ const supplierSections = individualSection || legacySupplierSections ||
   updateAccountArea();
   go('home');
 
-  if (state.token && localStorage.getItem('gozorx_current_order_id')) {
-    restoreCurrentOrder(true);
+  if (state.token && state.user) {
+    refreshSupplierDashboard();
   }
+
+  if (state.token && localStorage.getItem('gozorx_current_order_id')) {
+  restoreCurrentOrder(false);
+}
 })();

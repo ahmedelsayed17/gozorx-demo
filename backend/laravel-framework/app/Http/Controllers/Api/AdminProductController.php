@@ -11,7 +11,7 @@ class AdminProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with('supplier.user')
+        $products = Product::with(['supplier.user', 'images'])
             ->where('status', 'draft')
             ->latest()
             ->paginate(20);

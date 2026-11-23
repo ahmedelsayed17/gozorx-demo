@@ -31,6 +31,8 @@ class Order extends Model
         'shipping_cost_set_at',
         'stock_released_at',
         'stock_committed_at',
+        'delivered_at',
+        'completed_at',
     ];
 
     protected $casts = [
@@ -43,6 +45,8 @@ class Order extends Model
         'shipping_cost_set_at' => 'datetime',
         'stock_released_at' => 'datetime',
         'stock_committed_at' => 'datetime',
+        'delivered_at' => 'datetime',
+        'completed_at' => 'datetime',
     ];
 
     public function buyer(): BelongsTo
@@ -78,5 +82,9 @@ class Order extends Model
     public function paymentTransactions(): HasMany
     {
         return $this->hasMany(PaymentTransaction::class);
+    }
+    public function supplierSettlements(): HasMany
+    {
+        return $this->hasMany(SupplierSettlement::class);
     }
 }
